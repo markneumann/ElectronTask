@@ -53,6 +53,7 @@ const WINDOW_WIDTH = 320;
 const WINDOW_HEIGHT = 170;
 const TASKS_PAGE_LIMIT = 100;
 const MAX_TASK_PAGES = 20;
+const isDev = Boolean(MAIN_WINDOW_VITE_DEV_SERVER_URL);
 
 const store = new Store<AppStore>({
   name: 'settings',
@@ -83,8 +84,8 @@ const authProvider: AuthProvider = new PersonalTokenProvider();
 
 const trayIconSvg = `
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="8" fill="#171717"/>
-  <path d="M9 17.5 13.2 22 23 10" fill="none" stroke="#f8fafc" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="16" cy="16" r="11" fill="#22c55e"/>
+  <path d="M10 16.5 14.2 20.4 22.8 11.5" fill="none" stroke="#18181b" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>`;
 
 const asRecord = (value: unknown): Record<string, unknown> => {
@@ -348,15 +349,9 @@ const getMyTasks = async (): Promise<ClickUpSnapshot> => {
 };
 
 const createTrayIcon = () => {
-  const icon = nativeImage.createFromDataURL(
+  return nativeImage.createFromDataURL(
     `data:image/svg+xml;charset=utf-8,${encodeURIComponent(trayIconSvg)}`,
   );
-
-  if (process.platform === 'darwin') {
-    icon.setTemplateImage(true);
-  }
-
-  return icon;
 };
 
 const applyContentSecurityPolicy = () => {
@@ -426,6 +421,13 @@ const showWidget = () => {
     return;
   }
 
+  if (isDev) {
+    widgetWindow.center();
+    widgetWindow.show();
+    widgetWindow.focus();
+    return;
+  }
+
   widgetWindow.setBounds({
     ...getWidgetPosition(),
     width: WINDOW_WIDTH,
@@ -471,7 +473,7 @@ const createWidgetWindow = () => {
   widgetWindow.setAlwaysOnTop(true, 'floating');
   widgetWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 
-  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
+  if (isDev) {
     widgetWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
   } else {
     widgetWindow.loadFile(
@@ -479,13 +481,21 @@ const createWidgetWindow = () => {
     );
   }
 
-  widgetWindow.on('blur', () => {
-    hideWidget();
-  });
+  if (!isDev) {
+    widgetWindow.on('blur', () => {
+      hideWidget();
+    });
+  }
 
   widgetWindow.on('closed', () => {
     widgetWindow = null;
   });
+
+  if (isDev) {
+    widgetWindow.webContents.once('did-finish-load', () => {
+      showWidget();
+    });
+  }
 };
 
 const createTray = () => {
