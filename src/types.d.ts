@@ -68,6 +68,17 @@ type ActiveTaskState = {
   isPaused: boolean;
 };
 
+type HotkeyStatus = {
+  accelerator: string;
+  registered: boolean;
+  error: string | null;
+  options: string[];
+};
+
+type SetHotkeyPayload = {
+  accelerator: string;
+};
+
 interface Window {
   widget: {
     ping: () => Promise<WidgetPingResult>;
@@ -82,5 +93,9 @@ interface Window {
     setStatus: (payload: SetStatusPayload) => Promise<SetStatusResult>;
     setActiveTask: (payload: SetActiveTaskPayload) => Promise<ActiveTaskState>;
     pause: () => Promise<ActiveTaskState>;
+  };
+  hotkey: {
+    getStatus: () => Promise<HotkeyStatus>;
+    set: (payload: SetHotkeyPayload) => Promise<HotkeyStatus>;
   };
 }

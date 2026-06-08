@@ -20,3 +20,9 @@ contextBridge.exposeInMainWorld('clickup', {
     ipcRenderer.invoke('clickup:setActiveTask', payload) as Promise<ActiveTaskState>,
   pause: () => ipcRenderer.invoke('clickup:pause') as Promise<ActiveTaskState>,
 });
+
+contextBridge.exposeInMainWorld('hotkey', {
+  getStatus: () => ipcRenderer.invoke('hotkey:getStatus') as Promise<HotkeyStatus>,
+  set: (payload: SetHotkeyPayload) =>
+    ipcRenderer.invoke('hotkey:set', payload) as Promise<HotkeyStatus>,
+});

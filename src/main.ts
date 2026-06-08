@@ -3,6 +3,7 @@ import {
   BrowserWindow,
   Menu,
   Tray,
+  globalShortcut,
   ipcMain,
   nativeImage,
   safeStorage,
@@ -22,6 +23,7 @@ type AppStore = {
   defaultListId?: string;
   activeTaskId?: string;
   isPaused?: boolean;
+  hotkey?: string;
 };
 
 type ClickUpTask = {
@@ -61,8 +63,16 @@ type ClickUpSnapshot = {
 const CLICKUP_BASE_URL = 'https://api.clickup.com/api/v2';
 const WINDOW_WIDTH = 320;
 const WINDOW_HEIGHT = 170;
+const DEV_WINDOW_HEIGHT = 230;
 const TASKS_PAGE_LIMIT = 100;
 const MAX_TASK_PAGES = 20;
+const DEFAULT_HOTKEY = 'CommandOrControl+Shift+K';
+const HOTKEY_OPTIONS = [
+  DEFAULT_HOTKEY,
+  'CommandOrControl+Shift+Space',
+  'CommandOrControl+Alt+C',
+  'Alt+Shift+C',
+] as const;
 const isDev = Boolean(MAIN_WINDOW_VITE_DEV_SERVER_URL);
 
 const store = new Store<AppStore>({
@@ -72,6 +82,8 @@ const store = new Store<AppStore>({
 let widgetWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let sessionToken: string | null = null;
+let registeredHotkey: string | null = null;
+let hotkeyError: string | null = null;
 
 interface AuthProvider {
   currentAuthHeader(): Promise<string>;
@@ -158,11 +170,15 @@ const getDecryptedToken = () => {
     return null;
   }
 
-  return safeStorage.decryptString(Buffer.from(encryptedToken, 'base64'));
+  try {
+    return safeStorage.decryptString(Buffer.from(encryptedToken, 'base64'));
+  } catch {
+    return null;
+  }
 };
 
 const getAuthStatus = () => ({
-  hasToken: Boolean(sessionToken || store.get('encryptedToken')),
+  hasToken: Boolean(getDecryptedToken()),
   canPersistToken: canPersistToken(),
   storageBackend: getSafeStorageBackend(),
   defaultListId: store.get('defaultListId') ?? null,
@@ -425,6 +441,54 @@ const pauseActiveTask = () => {
   };
 };
 
+const getConfiguredHotkey = () => {
+  const storedHotkey = store.get('hotkey');
+
+  if (storedHotkey && HOTKEY_OPTIONS.includes(storedHotkey as typeof HOTKEY_OPTIONS[number])) {
+    return storedHotkey;
+  }
+
+  return DEFAULT_HOTKEY;
+};
+
+const getHotkeyStatus = () => ({
+  accelerator: getConfiguredHotkey(),
+  registered: registeredHotkey === getConfiguredHotkey(),
+  error: hotkeyError,
+  options: [...HOTKEY_OPTIONS],
+});
+
+const registerConfiguredHotkey = () => {
+  const accelerator = getConfiguredHotkey();
+
+  if (registeredHotkey) {
+    globalShortcut.unregister(registeredHotkey);
+    registeredHotkey = null;
+  }
+
+  const registered = globalShortcut.register(accelerator, toggleWidget);
+  hotkeyError = registered ? null : `${accelerator} is unavailable.`;
+  registeredHotkey = registered ? accelerator : null;
+
+  return getHotkeyStatus();
+};
+
+const setHotkey = (payload: unknown) => {
+  const data = asRecord(payload);
+  const accelerator = trimString(data.accelerator);
+
+  if (
+    !accelerator ||
+    !HOTKEY_OPTIONS.includes(accelerator as typeof HOTKEY_OPTIONS[number])
+  ) {
+    throw new Error('Choose one of the supported hotkey presets.');
+  }
+
+  store.set('hotkey', accelerator);
+
+  return registerConfiguredHotkey();
+};
+
 const setTaskStatus = async (payload: unknown) => {
   const data = asRecord(payload);
   const taskId = trimString(data.taskId);
@@ -559,12 +623,12 @@ const toggleWidget = () => {
 const createWidgetWindow = () => {
   widgetWindow = new BrowserWindow({
     width: WINDOW_WIDTH,
-    height: WINDOW_HEIGHT,
+    height: isDev ? DEV_WINDOW_HEIGHT : WINDOW_HEIGHT,
     show: false,
-    frame: false,
-    transparent: true,
+    frame: isDev,
+    transparent: !isDev,
     alwaysOnTop: true,
-    skipTaskbar: true,
+    skipTaskbar: !isDev,
     resizable: false,
     fullscreenable: false,
     maximizable: false,
@@ -629,6 +693,8 @@ ipcMain.handle('clickup:getMyTasks', getMyTasks);
 ipcMain.handle('clickup:setStatus', (_event, payload) => setTaskStatus(payload));
 ipcMain.handle('clickup:setActiveTask', (_event, payload) => setActiveTask(payload));
 ipcMain.handle('clickup:pause', pauseActiveTask);
+ipcMain.handle('hotkey:getStatus', getHotkeyStatus);
+ipcMain.handle('hotkey:set', (_event, payload) => setHotkey(payload));
 
 app.whenReady().then(() => {
   if (process.platform === 'darwin') {
@@ -638,6 +704,11 @@ app.whenReady().then(() => {
   applyContentSecurityPolicy();
   createWidgetWindow();
   createTray();
+  registerConfiguredHotkey();
+});
+
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
 });
 
 app.on('window-all-closed', () => {

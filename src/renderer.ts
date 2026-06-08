@@ -1,5 +1,7 @@
 import './index.css';
 
+document.body.classList.toggle('dev-window', Boolean(import.meta.env.DEV));
+
 type AppState =
   | { view: 'loading'; status: AuthStatus | null; message: string }
   | { view: 'setup'; status: AuthStatus; error: string | null }
@@ -7,9 +9,15 @@ type AppState =
       view: 'tasks';
       status: AuthStatus;
       snapshot: ClickUpSnapshot;
+      hotkey: HotkeyStatus;
       toast: ToastState | null;
     }
-  | { view: 'error'; status: AuthStatus; error: string };
+  | {
+      view: 'error';
+      status: AuthStatus;
+      hotkey: HotkeyStatus | null;
+      error: string;
+    };
 
 type ToastState = {
   kind: 'info' | 'error';
@@ -17,8 +25,6 @@ type ToastState = {
 };
 
 const root = document.getElementById('app');
-const nodeBlocked =
-  !('process' in globalThis) && !('require' in globalThis);
 
 const escapeHtml = (value: string | null) =>
   (value ?? '')
@@ -126,6 +132,7 @@ const snapshotWithStatus = (
 const renderTasks = (
   status: AuthStatus,
   snapshot: ClickUpSnapshot,
+  hotkey: HotkeyStatus,
   toast: ToastState | null,
 ) => {
   const activeTask = snapshot.activeTask;
@@ -148,6 +155,14 @@ const renderTasks = (
         `<option value="${escapeHtml(statusOption.name)}" ${
           statusOption.name === activeTask?.status ? 'selected' : ''
         }>${escapeHtml(statusOption.name)}</option>`,
+    )
+    .join('');
+  const hotkeyOptions = hotkey.options
+    .map(
+      (option) =>
+        `<option value="${escapeHtml(option)}" ${
+          option === hotkey.accelerator ? 'selected' : ''
+        }>${escapeHtml(option)}</option>`,
     )
     .join('');
 
@@ -186,21 +201,29 @@ const renderTasks = (
         : `<p class="notice">No list statuses available for this task.</p>`
     }
     <section class="footer-row">
-      <span>${snapshot.tasks.length} tasks &middot; Node ${nodeBlocked ? 'blocked' : 'exposed'}</span>
+      <select id="hotkey-select" class="hotkey-select" aria-label="Global hotkey" title="Global hotkey">
+        ${hotkeyOptions}
+      </select>
       <div class="footer-actions">
         <button id="refresh" class="icon-button" type="button" title="Refresh">R</button>
         <button id="pause" class="icon-button" type="button" title="${snapshot.isPaused ? 'Resume first task' : 'Pause'}">${snapshot.isPaused ? 'Play' : 'Pause'}</button>
         <button id="disconnect" class="icon-button" type="button" title="Forget token">X</button>
       </div>
     </section>
-    ${toast ? `<p class="toast ${toast.kind}">${escapeHtml(toast.message)}</p>` : ''}
+    ${
+      hotkey.error
+        ? `<p class="toast error">${escapeHtml(hotkey.error)}</p>`
+        : toast
+          ? `<p class="toast ${toast.kind}">${escapeHtml(toast.message)}</p>`
+          : ''
+    }
   `);
 
   document.getElementById('task-select')?.addEventListener('change', async (event) => {
     const select = event.currentTarget as HTMLSelectElement;
     const taskId = select.value;
 
-    renderTasks(status, snapshot, {
+    renderTasks(status, snapshot, hotkey, {
       kind: 'info',
       message: taskId ? 'Switching task...' : 'Pausing...',
     });
@@ -214,7 +237,7 @@ const renderTasks = (
 
       await loadTasks(status);
     } catch (error) {
-      renderTasks(status, snapshot, {
+      renderTasks(status, snapshot, hotkey, {
         kind: 'error',
         message: error instanceof Error ? error.message : 'Could not switch task.',
       });
@@ -231,7 +254,7 @@ const renderTasks = (
 
     const previousSnapshot = snapshot;
     const optimisticSnapshot = snapshotWithStatus(snapshot, activeTask.id, nextStatus);
-    renderTasks(status, optimisticSnapshot, {
+    renderTasks(status, optimisticSnapshot, hotkey, {
       kind: 'info',
       message: 'Updating status...',
     });
@@ -242,12 +265,12 @@ const renderTasks = (
         listId: activeTask.listId,
         status: nextStatus,
       });
-      renderTasks(status, optimisticSnapshot, {
+      renderTasks(status, optimisticSnapshot, hotkey, {
         kind: 'info',
         message: 'Status updated.',
       });
     } catch (error) {
-      renderTasks(status, previousSnapshot, {
+      renderTasks(status, previousSnapshot, hotkey, {
         kind: 'error',
         message:
           error instanceof Error ? error.message : 'Could not update status.',
@@ -257,6 +280,25 @@ const renderTasks = (
 
   document.getElementById('refresh')?.addEventListener('click', () => {
     loadTasks(status);
+  });
+
+  document.getElementById('hotkey-select')?.addEventListener('change', async (event) => {
+    const select = event.currentTarget as HTMLSelectElement;
+
+    try {
+      const nextHotkey = await window.hotkey.set({
+        accelerator: select.value,
+      });
+      renderTasks(status, snapshot, nextHotkey, {
+        kind: nextHotkey.registered ? 'info' : 'error',
+        message: nextHotkey.registered ? 'Hotkey updated.' : 'Hotkey unavailable.',
+      });
+    } catch (error) {
+      renderTasks(status, snapshot, hotkey, {
+        kind: 'error',
+        message: error instanceof Error ? error.message : 'Could not update hotkey.',
+      });
+    }
   });
 
   document.getElementById('pause')?.addEventListener('click', async () => {
@@ -273,7 +315,7 @@ const renderTasks = (
 
       await loadTasks(status);
     } catch (error) {
-      renderTasks(status, snapshot, {
+      renderTasks(status, snapshot, hotkey, {
         kind: 'error',
         message:
           error instanceof Error ? error.message : 'Could not update pause state.',
@@ -287,7 +329,51 @@ const renderTasks = (
   });
 };
 
-const renderError = (status: AuthStatus, error: string) => {
+const hotkeyOptionsHtml = (hotkey: HotkeyStatus) =>
+  hotkey.options
+    .map(
+      (option) =>
+        `<option value="${escapeHtml(option)}" ${
+          option === hotkey.accelerator ? 'selected' : ''
+        }>${escapeHtml(option)}</option>`,
+    )
+    .join('');
+
+const attachHotkeyControl = (
+  status: AuthStatus,
+  hotkey: HotkeyStatus,
+  onRender: (nextHotkey: HotkeyStatus, toast: ToastState | null) => void,
+) => {
+  document.getElementById('hotkey-select')?.addEventListener('change', async (event) => {
+    const select = event.currentTarget as HTMLSelectElement;
+
+    try {
+      const nextHotkey = await window.hotkey.set({
+        accelerator: select.value,
+      });
+      onRender(nextHotkey, {
+        kind: nextHotkey.registered ? 'info' : 'error',
+        message: nextHotkey.registered ? 'Hotkey updated.' : 'Hotkey unavailable.',
+      });
+    } catch (error) {
+      onRender(hotkey, {
+        kind: 'error',
+        message: error instanceof Error ? error.message : 'Could not update hotkey.',
+      });
+    }
+  });
+
+  document.getElementById('refresh')?.addEventListener('click', () => {
+    loadTasks(status);
+  });
+};
+
+const renderError = (
+  status: AuthStatus,
+  error: string,
+  hotkey: HotkeyStatus | null,
+  toast: ToastState | null = null,
+) => {
   renderShell(`
     <section class="task-summary" aria-label="Error">
       <div class="status-row">
@@ -297,13 +383,37 @@ const renderError = (status: AuthStatus, error: string) => {
       <h1>Could not load tasks</h1>
       <p class="task-name">${escapeHtml(error)}</p>
     </section>
-    <section class="action-row">
-      <button id="retry" type="button">Retry</button>
-      <button id="disconnect" class="ghost-button" type="button">Forget token</button>
-    </section>
+    ${
+      hotkey
+        ? `<section class="footer-row">
+            <select id="hotkey-select" class="hotkey-select" aria-label="Global hotkey" title="Global hotkey">
+              ${hotkeyOptionsHtml(hotkey)}
+            </select>
+            <div class="footer-actions">
+              <button id="refresh" class="icon-button" type="button" title="Retry">R</button>
+              <button id="disconnect" class="icon-button" type="button" title="Forget token">X</button>
+            </div>
+          </section>`
+        : `<section class="action-row">
+            <button id="retry" type="button">Retry</button>
+            <button id="disconnect" class="ghost-button" type="button">Forget token</button>
+          </section>`
+    }
+    ${
+      hotkey?.error
+        ? `<p class="toast error">${escapeHtml(hotkey.error)}</p>`
+        : toast
+          ? `<p class="toast ${toast.kind}">${escapeHtml(toast.message)}</p>`
+          : ''
+    }
   `);
 
   document.getElementById('retry')?.addEventListener('click', loadApp);
+  if (hotkey) {
+    attachHotkeyControl(status, hotkey, (nextHotkey, nextToast) => {
+      renderError(status, error, nextHotkey, nextToast);
+    });
+  }
   document.getElementById('disconnect')?.addEventListener('click', async () => {
     const nextStatus = await window.auth.clearToken();
     renderSetup(nextStatus, null);
@@ -319,10 +429,10 @@ const render = (state: AppState) => {
       renderSetup(state.status, state.error);
       break;
     case 'tasks':
-      renderTasks(state.status, state.snapshot, state.toast);
+      renderTasks(state.status, state.snapshot, state.hotkey, state.toast);
       break;
     case 'error':
-      renderError(state.status, state.error);
+      renderError(state.status, state.error, state.hotkey);
       break;
   }
 };
@@ -331,12 +441,15 @@ const loadTasks = async (status: AuthStatus) => {
   render({ view: 'loading', status, message: 'Loading assigned tasks...' });
 
   try {
+    const hotkey = await window.hotkey.getStatus();
     const snapshot = await window.clickup.getMyTasks();
-    render({ view: 'tasks', status, snapshot, toast: null });
+    render({ view: 'tasks', status, snapshot, hotkey, toast: null });
   } catch (error) {
+    const hotkey = await window.hotkey.getStatus().catch(() => null);
     render({
       view: 'error',
       status,
+      hotkey,
       error: error instanceof Error ? error.message : 'Unknown ClickUp error.',
     });
   }
