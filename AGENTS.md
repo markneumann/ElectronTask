@@ -1,0 +1,10 @@
+# Project Rules
+
+1. **The main process is the proxy. The token never reaches the renderer.** The decrypted token may exist only in main-process memory, preferably decrypted on demand for each request from `safeStorage`; the main process makes all HTTPS calls to ClickUp and returns parsed JSON to the renderer over IPC. The renderer never sees the raw token and never calls ClickUp directly. Main-process `fetch` also sidesteps CORS.
+2. **Electron security baseline is non-negotiable:** `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`, no `@electron/remote`. All renderer-to-main communication goes through a preload script using `contextBridge` exposing only specific, named functions, such as `clickup.getMyTasks()`, `clickup.setStatus()`, and `auth.saveToken()`. Validate all IPC inputs in the main process. Set a strict Content-Security-Policy and load only the local bundle, never remote content.
+3. **No secrets in code or git.** No tokens, no client secrets. The token is entered by the user at runtime and stored encrypted via `safeStorage` only.
+4. **Handle the Linux plaintext fallback.** If `safeStorage.getSelectedStorageBackend()` returns `basic_text`, do not silently persist the token. Warn the user and either hold it in memory for the session or refuse to save it unencrypted.
+5. **No telemetry, analytics, or third-party services** other than the ClickUp API.
+6. **Ask before adding any dependency** other than scaffold-generated Electron Forge/Vite/TypeScript tooling, `electron-store` or `electron-conf`, and the explicitly chosen renderer option from the build prompt's Stack section.
+7. **Build in vertical slices.** Complete one milestone at a time; each must build and run before moving on. Commit after each milestone with a clear message. Stop and summarize after each milestone so the user can review.
+8. **Cross-platform from day one.** Keep the code cross-platform from the start and avoid OS-specific assumptions. Verify platform packaging in M5 on each target OS or CI runner.
