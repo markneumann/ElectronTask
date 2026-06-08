@@ -69,6 +69,14 @@ type ActiveTaskState = {
   isPaused: boolean;
 };
 
+type OpenTaskPayload = {
+  taskId: string;
+};
+
+type OpenTaskResult = {
+  taskId: string;
+};
+
 type HotkeyStatus = {
   accelerator: string;
   registered: boolean;
@@ -102,6 +110,7 @@ interface Window {
     getMyTasks: () => Promise<ClickUpSnapshot>;
     setStatus: (payload: SetStatusPayload) => Promise<SetStatusResult>;
     setActiveTask: (payload: SetActiveTaskPayload) => Promise<ActiveTaskState>;
+    openTask: (payload: OpenTaskPayload) => Promise<OpenTaskResult>;
     pause: () => Promise<ActiveTaskState>;
   };
   hotkey: {

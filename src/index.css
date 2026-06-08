@@ -197,7 +197,7 @@ select:focus {
 .footer-row {
   flex: 0 0 24px;
   display: grid;
-  grid-template-columns: 1fr 136px;
+  grid-template-columns: 1fr 164px;
   align-items: center;
   gap: 8px;
   min-width: 0;
@@ -220,7 +220,7 @@ select:focus {
 
 .footer-actions {
   display: grid;
-  grid-template-columns: 24px 24px 56px 24px;
+  grid-template-columns: 24px 24px 24px 56px 24px;
   gap: 4px;
 }
 
@@ -298,6 +298,17 @@ button {
   height: 24px;
   color: #d6d3d1;
   background: rgba(255, 255, 255, 0.08);
+}
+
+.task-open-link {
+  width: fit-content;
+  height: 18px;
+  margin: 3px 0 0;
+  padding: 0;
+  color: #bef264;
+  background: transparent;
+  font-size: 10px;
+  font-weight: 700;
 }
 
 .action-row {

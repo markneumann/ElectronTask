@@ -130,6 +130,17 @@ const snapshotWithStatus = (
   ),
 });
 
+const daysSinceUpdateLabel = (dateUpdated: number) => {
+  if (!Number.isFinite(dateUpdated) || dateUpdated <= 0) {
+    return 'unknown';
+  }
+
+  const elapsedMs = Date.now() - dateUpdated;
+  const elapsedDays = Math.max(0, Math.floor(elapsedMs / 86_400_000));
+
+  return elapsedDays === 1 ? '1 day' : `${elapsedDays} days`;
+};
+
 const renderTasks = (
   status: AuthStatus,
   snapshot: ClickUpSnapshot,
@@ -148,7 +159,9 @@ const renderTasks = (
       (task) =>
         `<option value="${escapeHtml(task.id)}" ${
           task.id === snapshot.activeTaskId ? 'selected' : ''
-        }>${escapeHtml(`${task.status} - ${task.name}`)}</option>`,
+        }>${escapeHtml(
+          `${task.status} - ${task.name} - ${daysSinceUpdateLabel(task.dateUpdated)}`,
+        )}</option>`,
     )
     .join('');
   const options = snapshot.activeTaskStatuses
@@ -187,6 +200,11 @@ const renderTasks = (
             ? 'No active task'
             : activeTask?.name ?? 'No assigned task',
       )}</h1>
+      ${
+        activeTask && !snapshot.isPaused
+          ? `<button id="open-task-title" class="task-open-link" type="button">Open in ClickUp</button>`
+          : ''
+      }
       <p class="task-name">
         ${escapeHtml(
           snapshot.isEmpty
@@ -222,6 +240,7 @@ const renderTasks = (
       </select>
       <div class="footer-actions">
         <button id="refresh" class="icon-button" type="button" title="Refresh">R</button>
+        <button id="open-task" class="icon-button" type="button" title="Open selected task in ClickUp">O</button>
         <button id="launch-login" class="icon-button ${launchAtLogin.enabled ? 'active' : ''}" type="button" title="Launch at login">L</button>
         <button id="pause" class="icon-button" type="button" title="${snapshot.isPaused ? 'Resume first task' : 'Pause'}">${snapshot.isPaused ? 'Play' : 'Pause'}</button>
         <button id="disconnect" class="icon-button" type="button" title="Forget token">X</button>
@@ -298,6 +317,32 @@ const renderTasks = (
   document.getElementById('refresh')?.addEventListener('click', () => {
     loadTasks(status);
   });
+
+  const openActiveTask = async () => {
+    if (!activeTask || snapshot.isPaused) {
+      renderTasks(status, snapshot, hotkey, launchAtLogin, {
+        kind: 'error',
+        message: 'Choose an active task first.',
+      });
+      return;
+    }
+
+    try {
+      await window.clickup.openTask({ taskId: activeTask.id });
+      renderTasks(status, snapshot, hotkey, launchAtLogin, {
+        kind: 'info',
+        message: 'Opened in ClickUp.',
+      });
+    } catch (error) {
+      renderTasks(status, snapshot, hotkey, launchAtLogin, {
+        kind: 'error',
+        message: error instanceof Error ? error.message : 'Could not open task.',
+      });
+    }
+  };
+
+  document.getElementById('open-task-title')?.addEventListener('click', openActiveTask);
+  document.getElementById('open-task')?.addEventListener('click', openActiveTask);
 
   document.getElementById('hotkey-select')?.addEventListener('change', async (event) => {
     const select = event.currentTarget as HTMLSelectElement;

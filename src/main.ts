@@ -9,6 +9,7 @@ import {
   safeStorage,
   screen,
   session,
+  shell,
 } from 'electron';
 import Store from 'electron-store';
 import fs from 'node:fs';
@@ -480,6 +481,21 @@ const setActiveTask = (payload: unknown) => {
   };
 };
 
+const openTask = async (payload: unknown) => {
+  const data = asRecord(payload);
+  const taskId = trimString(data.taskId);
+
+  if (!taskId || !/^[A-Za-z0-9_-]+$/.test(taskId)) {
+    throw new Error('A valid ClickUp task id is required.');
+  }
+
+  await shell.openExternal(`https://app.clickup.com/t/${encodeURIComponent(taskId)}`);
+
+  return {
+    taskId,
+  };
+};
+
 const pauseActiveTask = () => {
   store.set('isPaused', true);
 
@@ -799,6 +815,7 @@ ipcMain.handle('auth:clearToken', clearToken);
 ipcMain.handle('clickup:getMyTasks', getMyTasks);
 ipcMain.handle('clickup:setStatus', (_event, payload) => setTaskStatus(payload));
 ipcMain.handle('clickup:setActiveTask', (_event, payload) => setActiveTask(payload));
+ipcMain.handle('clickup:openTask', (_event, payload) => openTask(payload));
 ipcMain.handle('clickup:pause', pauseActiveTask);
 ipcMain.handle('hotkey:getStatus', getHotkeyStatus);
 ipcMain.handle('hotkey:set', (_event, payload) => setHotkey(payload));
