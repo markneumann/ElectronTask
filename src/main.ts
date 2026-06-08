@@ -5,9 +5,11 @@ import {
   Tray,
   ipcMain,
   nativeImage,
+  safeStorage,
   screen,
   session,
 } from 'electron';
+import Store from 'electron-store';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
 
@@ -15,17 +17,335 @@ if (started) {
   app.quit();
 }
 
+type AppStore = {
+  encryptedToken?: string;
+  defaultListId?: string;
+};
+
+type ClickUpTask = {
+  id: string;
+  name: string;
+  status: string;
+  listId: string | null;
+  listName: string | null;
+  dateUpdated: number;
+};
+
+type ClickUpTeam = {
+  id: string;
+  name: string;
+};
+
+type ClickUpSnapshot = {
+  user: {
+    id: string;
+    username: string | null;
+  };
+  teams: ClickUpTeam[];
+  tasks: ClickUpTask[];
+  activeTask: ClickUpTask | null;
+  source: 'team' | 'list';
+  fetchedAt: string;
+};
+
+const CLICKUP_BASE_URL = 'https://api.clickup.com/api/v2';
 const WINDOW_WIDTH = 320;
 const WINDOW_HEIGHT = 170;
+const TASKS_PAGE_LIMIT = 100;
+const MAX_TASK_PAGES = 20;
+
+const store = new Store<AppStore>({
+  name: 'settings',
+});
 
 let widgetWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
+let sessionToken: string | null = null;
+
+interface AuthProvider {
+  currentAuthHeader(): Promise<string>;
+}
+
+class PersonalTokenProvider implements AuthProvider {
+  async currentAuthHeader() {
+    const token = getDecryptedToken();
+
+    if (!token) {
+      throw new Error('ClickUp token is not configured.');
+    }
+
+    return token;
+  }
+}
+
+// Extension point for a future OAuthProvider. Do not implement OAuth in v1.
+const authProvider: AuthProvider = new PersonalTokenProvider();
 
 const trayIconSvg = `
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
   <rect width="32" height="32" rx="8" fill="#171717"/>
   <path d="M9 17.5 13.2 22 23 10" fill="none" stroke="#f8fafc" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>`;
+
+const asRecord = (value: unknown): Record<string, unknown> => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {};
+  }
+
+  return value as Record<string, unknown>;
+};
+
+const asArray = (value: unknown): unknown[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value;
+};
+
+const stringValue = (value: unknown) => {
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  if (typeof value === 'number') {
+    return String(value);
+  }
+
+  return null;
+};
+
+const trimString = (value: unknown) => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+
+  return trimmed.length > 0 ? trimmed : null;
+};
+
+const getSafeStorageBackend = () => {
+  if (typeof safeStorage.getSelectedStorageBackend !== 'function') {
+    return 'unknown';
+  }
+
+  return safeStorage.getSelectedStorageBackend();
+};
+
+const canPersistToken = () =>
+  safeStorage.isEncryptionAvailable() && getSafeStorageBackend() !== 'basic_text';
+
+const getDecryptedToken = () => {
+  if (sessionToken) {
+    return sessionToken;
+  }
+
+  const encryptedToken = store.get('encryptedToken');
+
+  if (!encryptedToken || !canPersistToken()) {
+    return null;
+  }
+
+  return safeStorage.decryptString(Buffer.from(encryptedToken, 'base64'));
+};
+
+const getAuthStatus = () => ({
+  hasToken: Boolean(sessionToken || store.get('encryptedToken')),
+  canPersistToken: canPersistToken(),
+  storageBackend: getSafeStorageBackend(),
+  defaultListId: store.get('defaultListId') ?? null,
+});
+
+const saveToken = (payload: unknown) => {
+  const data = asRecord(payload);
+  const token = trimString(data.token);
+  const defaultListId = trimString(data.defaultListId);
+  const remember = data.remember !== false;
+
+  if (!token) {
+    throw new Error('A ClickUp personal token is required.');
+  }
+
+  if (defaultListId) {
+    store.set('defaultListId', defaultListId);
+  } else {
+    store.delete('defaultListId');
+  }
+
+  if (!remember) {
+    sessionToken = token;
+    store.delete('encryptedToken');
+
+    return getAuthStatus();
+  }
+
+  if (!canPersistToken()) {
+    throw new Error(
+      'This system is using Electron safeStorage basic_text mode, so the token was not saved. Disable remember token to use it for this session only.',
+    );
+  }
+
+  const encryptedToken = safeStorage.encryptString(token).toString('base64');
+  sessionToken = null;
+  store.set('encryptedToken', encryptedToken);
+
+  return getAuthStatus();
+};
+
+const clearToken = () => {
+  sessionToken = null;
+  store.delete('encryptedToken');
+
+  return getAuthStatus();
+};
+
+const clickUpFetch = async (pathName: string, init?: RequestInit) => {
+  const authorization = await authProvider.currentAuthHeader();
+  const response = await fetch(`${CLICKUP_BASE_URL}${pathName}`, {
+    ...init,
+    headers: {
+      Authorization: authorization,
+      'Content-Type': 'application/json',
+      ...(init?.headers ?? {}),
+    },
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    const detail = body ? `: ${body.slice(0, 180)}` : '';
+
+    throw new Error(`ClickUp ${response.status} ${response.statusText}${detail}`);
+  }
+
+  return response.json() as Promise<unknown>;
+};
+
+const getCurrentUser = async () => {
+  const body = asRecord(await clickUpFetch('/user'));
+  const user = asRecord(body.user);
+  const id = stringValue(user.id);
+
+  if (!id) {
+    throw new Error('ClickUp /user response did not include a user id.');
+  }
+
+  return {
+    id,
+    username: stringValue(user.username) ?? stringValue(user.email),
+  };
+};
+
+const getTeams = async () => {
+  const body = asRecord(await clickUpFetch('/team'));
+
+  return asArray(body.teams)
+    .map((team) => {
+      const record = asRecord(team);
+      const id = stringValue(record.id);
+
+      if (!id) {
+        return null;
+      }
+
+      return {
+        id,
+        name: stringValue(record.name) ?? 'Workspace',
+      };
+    })
+    .filter((team): team is ClickUpTeam => Boolean(team));
+};
+
+const mapTask = (task: unknown): ClickUpTask | null => {
+  const record = asRecord(task);
+  const id = stringValue(record.id);
+  const name = stringValue(record.name);
+
+  if (!id || !name) {
+    return null;
+  }
+
+  const status = asRecord(record.status);
+  const list = asRecord(record.list);
+  const dateUpdated = Number(stringValue(record.date_updated) ?? 0);
+
+  return {
+    id,
+    name,
+    status: stringValue(status.status) ?? 'Unknown',
+    listId: stringValue(list.id),
+    listName: stringValue(list.name),
+    dateUpdated: Number.isFinite(dateUpdated) ? dateUpdated : 0,
+  };
+};
+
+const getPagedTasks = async (pathName: string, params: URLSearchParams) => {
+  const tasks: ClickUpTask[] = [];
+
+  for (let page = 0; page < MAX_TASK_PAGES; page += 1) {
+    params.set('page', String(page));
+    const body = asRecord(await clickUpFetch(`${pathName}?${params.toString()}`));
+    const pageTasks = asArray(body.tasks)
+      .map(mapTask)
+      .filter((task): task is ClickUpTask => Boolean(task));
+
+    tasks.push(...pageTasks);
+
+    if (pageTasks.length < TASKS_PAGE_LIMIT) {
+      break;
+    }
+  }
+
+  return tasks;
+};
+
+const getTasksFromList = async (listId: string, userId: string) => {
+  const params = new URLSearchParams({
+    include_closed: 'false',
+    order_by: 'updated',
+    reverse: 'true',
+  });
+  params.append('assignees[]', userId);
+
+  return getPagedTasks(`/list/${encodeURIComponent(listId)}/task`, params);
+};
+
+const getTasksFromTeams = async (teams: ClickUpTeam[], userId: string) => {
+  const taskGroups = await Promise.all(
+    teams.map((team) => {
+      const params = new URLSearchParams({
+        include_closed: 'false',
+        order_by: 'updated',
+        reverse: 'true',
+      });
+      params.append('assignees[]', userId);
+
+      return getPagedTasks(`/team/${encodeURIComponent(team.id)}/task`, params);
+    }),
+  );
+
+  return taskGroups.flat();
+};
+
+const getMyTasks = async (): Promise<ClickUpSnapshot> => {
+  const user = await getCurrentUser();
+  const teams = await getTeams();
+  const defaultListId = store.get('defaultListId');
+  const source = defaultListId ? 'list' : 'team';
+  const tasks = defaultListId
+    ? await getTasksFromList(defaultListId, user.id)
+    : await getTasksFromTeams(teams, user.id);
+  const sortedTasks = tasks.sort((left, right) => right.dateUpdated - left.dateUpdated);
+
+  return {
+    user,
+    teams,
+    tasks: sortedTasks,
+    activeTask: sortedTasks[0] ?? null,
+    source,
+    fetchedAt: new Date().toISOString(),
+  };
+};
 
 const createTrayIcon = () => {
   const icon = nativeImage.createFromDataURL(
@@ -185,6 +505,10 @@ ipcMain.handle('widget:ping', () => ({
   ok: true,
   message: 'main process reachable',
 }));
+ipcMain.handle('auth:getStatus', getAuthStatus);
+ipcMain.handle('auth:saveToken', (_event, payload) => saveToken(payload));
+ipcMain.handle('auth:clearToken', clearToken);
+ipcMain.handle('clickup:getMyTasks', getMyTasks);
 
 app.whenReady().then(() => {
   if (process.platform === 'darwin') {
