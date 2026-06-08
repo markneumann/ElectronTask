@@ -148,7 +148,7 @@ const renderTasks = (
       (task) =>
         `<option value="${escapeHtml(task.id)}" ${
           task.id === snapshot.activeTaskId ? 'selected' : ''
-        }>${escapeHtml(task.name)}</option>`,
+        }>${escapeHtml(`${task.status} - ${task.name}`)}</option>`,
     )
     .join('');
   const options = snapshot.activeTaskStatuses
