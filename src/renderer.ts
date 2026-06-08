@@ -134,6 +134,14 @@ const renderTasks = (
   const canChangeStatus = Boolean(
     activeTask?.listId && snapshot.activeTaskStatuses.length > 0,
   );
+  const taskOptions = snapshot.tasks
+    .map(
+      (task) =>
+        `<option value="${escapeHtml(task.id)}" ${
+          task.id === snapshot.activeTaskId ? 'selected' : ''
+        }>${escapeHtml(task.name)}</option>`,
+    )
+    .join('');
   const options = snapshot.activeTaskStatuses
     .map(
       (statusOption) =>
@@ -146,14 +154,29 @@ const renderTasks = (
   renderShell(`
     <section class="task-summary" aria-label="Current ClickUp task">
       <div class="status-row">
-        <span class="status-dot" aria-hidden="true"></span>
-        <span class="status-label">${escapeHtml(activeTask?.status ?? 'No open task')}</span>
+        <span class="status-dot ${snapshot.isPaused ? 'warn' : ''}" aria-hidden="true"></span>
+        <span class="status-label">${escapeHtml(
+          snapshot.isPaused ? 'Paused' : activeTask?.status ?? 'No open task',
+        )}</span>
       </div>
-      <h1>${escapeHtml(activeTask?.name ?? 'No assigned task')}</h1>
+      <h1>${escapeHtml(
+        snapshot.isPaused ? 'No active task' : activeTask?.name ?? 'No assigned task',
+      )}</h1>
       <p class="task-name">
-        ${escapeHtml(activeTask?.listName ?? sourceLabel)}
+        ${escapeHtml(snapshot.isPaused ? 'Paused until you choose a task' : activeTask?.listName ?? sourceLabel)}
       </p>
     </section>
+    ${
+      snapshot.tasks.length > 0
+        ? `<label class="task-picker">
+            <span>Task</span>
+            <select id="task-select" aria-label="Switch active task">
+              <option value="" ${snapshot.isPaused ? 'selected' : ''}>Paused</option>
+              ${taskOptions}
+            </select>
+          </label>`
+        : ''
+    }
     ${
       canChangeStatus
         ? `<label class="status-control">
@@ -164,10 +187,39 @@ const renderTasks = (
     }
     <section class="footer-row">
       <span>${snapshot.tasks.length} tasks &middot; Node ${nodeBlocked ? 'blocked' : 'exposed'}</span>
-      <button id="disconnect" class="ghost-button" type="button">Forget</button>
+      <div class="footer-actions">
+        <button id="refresh" class="icon-button" type="button" title="Refresh">R</button>
+        <button id="pause" class="icon-button" type="button" title="${snapshot.isPaused ? 'Resume first task' : 'Pause'}">${snapshot.isPaused ? 'Play' : 'Pause'}</button>
+        <button id="disconnect" class="icon-button" type="button" title="Forget token">X</button>
+      </div>
     </section>
     ${toast ? `<p class="toast ${toast.kind}">${escapeHtml(toast.message)}</p>` : ''}
   `);
+
+  document.getElementById('task-select')?.addEventListener('change', async (event) => {
+    const select = event.currentTarget as HTMLSelectElement;
+    const taskId = select.value;
+
+    renderTasks(status, snapshot, {
+      kind: 'info',
+      message: taskId ? 'Switching task...' : 'Pausing...',
+    });
+
+    try {
+      if (taskId) {
+        await window.clickup.setActiveTask({ taskId });
+      } else {
+        await window.clickup.pause();
+      }
+
+      await loadTasks(status);
+    } catch (error) {
+      renderTasks(status, snapshot, {
+        kind: 'error',
+        message: error instanceof Error ? error.message : 'Could not switch task.',
+      });
+    }
+  });
 
   document.getElementById('status-select')?.addEventListener('change', async (event) => {
     const select = event.currentTarget as HTMLSelectElement;
@@ -199,6 +251,32 @@ const renderTasks = (
         kind: 'error',
         message:
           error instanceof Error ? error.message : 'Could not update status.',
+      });
+    }
+  });
+
+  document.getElementById('refresh')?.addEventListener('click', () => {
+    loadTasks(status);
+  });
+
+  document.getElementById('pause')?.addEventListener('click', async () => {
+    try {
+      if (snapshot.isPaused) {
+        const firstTask = snapshot.tasks[0];
+
+        if (firstTask) {
+          await window.clickup.setActiveTask({ taskId: firstTask.id });
+        }
+      } else {
+        await window.clickup.pause();
+      }
+
+      await loadTasks(status);
+    } catch (error) {
+      renderTasks(status, snapshot, {
+        kind: 'error',
+        message:
+          error instanceof Error ? error.message : 'Could not update pause state.',
       });
     }
   });

@@ -29,7 +29,7 @@ textarea {
 .widget-shell {
   width: 100vw;
   height: 100vh;
-  padding: 12px;
+  padding: 10px;
   overflow: hidden;
   background:
     linear-gradient(135deg, rgba(24, 24, 27, 0.97), rgba(38, 38, 38, 0.97)),
@@ -41,7 +41,7 @@ textarea {
     0 1px 0 rgba(255, 255, 255, 0.08) inset;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .task-summary,
@@ -65,7 +65,7 @@ textarea {
   align-items: center;
   gap: 7px;
   min-height: 16px;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .status-dot {
@@ -97,7 +97,7 @@ textarea {
 h1 {
   margin: 0;
   color: #fafaf9;
-  font-size: 18px;
+  font-size: 16px;
   line-height: 1.12;
   font-weight: 760;
   letter-spacing: 0;
@@ -108,7 +108,7 @@ h1 {
 }
 
 .task-name {
-  margin: 6px 0 0;
+  margin: 4px 0 0;
   color: #d6d3d1;
   font-size: 12px;
   line-height: 1.3;
@@ -155,8 +155,9 @@ h1 {
   line-height: 1.1;
 }
 
+.task-picker,
 .status-control {
-  flex: 0 0 38px;
+  flex: 0 0 30px;
   display: grid;
   grid-template-columns: 54px 1fr;
   align-items: center;
@@ -164,6 +165,7 @@ h1 {
   min-width: 0;
 }
 
+.task-picker span,
 .status-control span {
   color: #a8a29e;
   font-size: 11px;
@@ -191,7 +193,7 @@ select:focus {
 .footer-row {
   flex: 0 0 24px;
   display: grid;
-  grid-template-columns: 1fr 64px;
+  grid-template-columns: 1fr 112px;
   align-items: center;
   gap: 8px;
   min-width: 0;
@@ -204,6 +206,12 @@ select:focus {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.footer-actions {
+  display: grid;
+  grid-template-columns: 24px 56px 24px;
+  gap: 4px;
 }
 
 .setup-form {
@@ -257,6 +265,17 @@ button {
   font-size: 12px;
   font-weight: 750;
   cursor: pointer;
+}
+
+.icon-button {
+  height: 24px;
+  padding: 0 6px;
+  color: #d6d3d1;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ghost-button {

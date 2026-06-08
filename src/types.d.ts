@@ -42,6 +42,8 @@ type ClickUpSnapshot = {
   tasks: ClickUpTask[];
   activeTask: ClickUpTask | null;
   activeTaskStatuses: ClickUpStatus[];
+  activeTaskId: string | null;
+  isPaused: boolean;
   source: 'team' | 'list';
   fetchedAt: string;
 };
@@ -57,6 +59,15 @@ type SetStatusResult = {
   status: string;
 };
 
+type SetActiveTaskPayload = {
+  taskId: string;
+};
+
+type ActiveTaskState = {
+  activeTaskId: string | null;
+  isPaused: boolean;
+};
+
 interface Window {
   widget: {
     ping: () => Promise<WidgetPingResult>;
@@ -69,5 +80,7 @@ interface Window {
   clickup: {
     getMyTasks: () => Promise<ClickUpSnapshot>;
     setStatus: (payload: SetStatusPayload) => Promise<SetStatusResult>;
+    setActiveTask: (payload: SetActiveTaskPayload) => Promise<ActiveTaskState>;
+    pause: () => Promise<ActiveTaskState>;
   };
 }

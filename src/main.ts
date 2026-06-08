@@ -20,6 +20,8 @@ if (started) {
 type AppStore = {
   encryptedToken?: string;
   defaultListId?: string;
+  activeTaskId?: string;
+  isPaused?: boolean;
 };
 
 type ClickUpTask = {
@@ -50,6 +52,8 @@ type ClickUpSnapshot = {
   tasks: ClickUpTask[];
   activeTask: ClickUpTask | null;
   activeTaskStatuses: ClickUpStatus[];
+  activeTaskId: string | null;
+  isPaused: boolean;
   source: 'team' | 'list';
   fetchedAt: string;
 };
@@ -368,10 +372,19 @@ const getMyTasks = async (): Promise<ClickUpSnapshot> => {
     ? await getTasksFromList(defaultListId, user.id)
     : await getTasksFromTeams(teams, user.id);
   const sortedTasks = tasks.sort((left, right) => right.dateUpdated - left.dateUpdated);
-  const activeTask = sortedTasks[0] ?? null;
+  const isPaused = store.get('isPaused') === true;
+  const storedActiveTaskId = store.get('activeTaskId') ?? null;
+  const selectedTask = storedActiveTaskId
+    ? sortedTasks.find((task) => task.id === storedActiveTaskId) ?? null
+    : null;
+  const activeTask = isPaused ? null : selectedTask ?? sortedTasks[0] ?? null;
   const activeTaskStatuses = activeTask?.listId
     ? await getListStatuses(activeTask.listId)
     : [];
+
+  if (!isPaused && activeTask && activeTask.id !== storedActiveTaskId) {
+    store.set('activeTaskId', activeTask.id);
+  }
 
   return {
     user,
@@ -379,8 +392,36 @@ const getMyTasks = async (): Promise<ClickUpSnapshot> => {
     tasks: sortedTasks,
     activeTask,
     activeTaskStatuses,
+    activeTaskId: activeTask?.id ?? null,
+    isPaused,
     source,
     fetchedAt: new Date().toISOString(),
+  };
+};
+
+const setActiveTask = (payload: unknown) => {
+  const data = asRecord(payload);
+  const taskId = trimString(data.taskId);
+
+  if (!taskId) {
+    throw new Error('Task id is required.');
+  }
+
+  store.set('activeTaskId', taskId);
+  store.set('isPaused', false);
+
+  return {
+    activeTaskId: taskId,
+    isPaused: false,
+  };
+};
+
+const pauseActiveTask = () => {
+  store.set('isPaused', true);
+
+  return {
+    activeTaskId: store.get('activeTaskId') ?? null,
+    isPaused: true,
   };
 };
 
@@ -586,6 +627,8 @@ ipcMain.handle('auth:saveToken', (_event, payload) => saveToken(payload));
 ipcMain.handle('auth:clearToken', clearToken);
 ipcMain.handle('clickup:getMyTasks', getMyTasks);
 ipcMain.handle('clickup:setStatus', (_event, payload) => setTaskStatus(payload));
+ipcMain.handle('clickup:setActiveTask', (_event, payload) => setActiveTask(payload));
+ipcMain.handle('clickup:pause', pauseActiveTask);
 
 app.whenReady().then(() => {
   if (process.platform === 'darwin') {
