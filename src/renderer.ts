@@ -10,6 +10,7 @@ type AppState =
       status: AuthStatus;
       snapshot: ClickUpSnapshot;
       hotkey: HotkeyStatus;
+      launchAtLogin: LaunchAtLoginStatus;
       toast: ToastState | null;
     }
   | {
@@ -133,6 +134,7 @@ const renderTasks = (
   status: AuthStatus,
   snapshot: ClickUpSnapshot,
   hotkey: HotkeyStatus,
+  launchAtLogin: LaunchAtLoginStatus,
   toast: ToastState | null,
 ) => {
   const activeTask = snapshot.activeTask;
@@ -171,14 +173,28 @@ const renderTasks = (
       <div class="status-row">
         <span class="status-dot ${snapshot.isPaused ? 'warn' : ''}" aria-hidden="true"></span>
         <span class="status-label">${escapeHtml(
-          snapshot.isPaused ? 'Paused' : activeTask?.status ?? 'No open task',
+          snapshot.isEmpty
+            ? 'Empty'
+            : snapshot.isPaused
+              ? 'Paused'
+              : activeTask?.status ?? 'No open task',
         )}</span>
       </div>
       <h1>${escapeHtml(
-        snapshot.isPaused ? 'No active task' : activeTask?.name ?? 'No assigned task',
+        snapshot.isEmpty
+          ? 'No assigned tasks'
+          : snapshot.isPaused
+            ? 'No active task'
+            : activeTask?.name ?? 'No assigned task',
       )}</h1>
       <p class="task-name">
-        ${escapeHtml(snapshot.isPaused ? 'Paused until you choose a task' : activeTask?.listName ?? sourceLabel)}
+        ${escapeHtml(
+          snapshot.isEmpty
+            ? 'Refresh when ClickUp has assigned work.'
+            : snapshot.isPaused
+              ? 'Paused until you choose a task'
+              : activeTask?.listName ?? sourceLabel,
+        )}
       </p>
     </section>
     ${
@@ -206,6 +222,7 @@ const renderTasks = (
       </select>
       <div class="footer-actions">
         <button id="refresh" class="icon-button" type="button" title="Refresh">R</button>
+        <button id="launch-login" class="icon-button ${launchAtLogin.enabled ? 'active' : ''}" type="button" title="Launch at login">L</button>
         <button id="pause" class="icon-button" type="button" title="${snapshot.isPaused ? 'Resume first task' : 'Pause'}">${snapshot.isPaused ? 'Play' : 'Pause'}</button>
         <button id="disconnect" class="icon-button" type="button" title="Forget token">X</button>
       </div>
@@ -223,7 +240,7 @@ const renderTasks = (
     const select = event.currentTarget as HTMLSelectElement;
     const taskId = select.value;
 
-    renderTasks(status, snapshot, hotkey, {
+    renderTasks(status, snapshot, hotkey, launchAtLogin, {
       kind: 'info',
       message: taskId ? 'Switching task...' : 'Pausing...',
     });
@@ -237,7 +254,7 @@ const renderTasks = (
 
       await loadTasks(status);
     } catch (error) {
-      renderTasks(status, snapshot, hotkey, {
+      renderTasks(status, snapshot, hotkey, launchAtLogin, {
         kind: 'error',
         message: error instanceof Error ? error.message : 'Could not switch task.',
       });
@@ -254,7 +271,7 @@ const renderTasks = (
 
     const previousSnapshot = snapshot;
     const optimisticSnapshot = snapshotWithStatus(snapshot, activeTask.id, nextStatus);
-    renderTasks(status, optimisticSnapshot, hotkey, {
+    renderTasks(status, optimisticSnapshot, hotkey, launchAtLogin, {
       kind: 'info',
       message: 'Updating status...',
     });
@@ -265,12 +282,12 @@ const renderTasks = (
         listId: activeTask.listId,
         status: nextStatus,
       });
-      renderTasks(status, optimisticSnapshot, hotkey, {
+      renderTasks(status, optimisticSnapshot, hotkey, launchAtLogin, {
         kind: 'info',
         message: 'Status updated.',
       });
     } catch (error) {
-      renderTasks(status, previousSnapshot, hotkey, {
+      renderTasks(status, previousSnapshot, hotkey, launchAtLogin, {
         kind: 'error',
         message:
           error instanceof Error ? error.message : 'Could not update status.',
@@ -289,14 +306,36 @@ const renderTasks = (
       const nextHotkey = await window.hotkey.set({
         accelerator: select.value,
       });
-      renderTasks(status, snapshot, nextHotkey, {
+      renderTasks(status, snapshot, nextHotkey, launchAtLogin, {
         kind: nextHotkey.registered ? 'info' : 'error',
         message: nextHotkey.registered ? 'Hotkey updated.' : 'Hotkey unavailable.',
       });
     } catch (error) {
-      renderTasks(status, snapshot, hotkey, {
+      renderTasks(status, snapshot, hotkey, launchAtLogin, {
         kind: 'error',
         message: error instanceof Error ? error.message : 'Could not update hotkey.',
+      });
+    }
+  });
+
+  document.getElementById('launch-login')?.addEventListener('click', async () => {
+    try {
+      const nextLaunchAtLogin = await window.settings.setLaunchAtLogin({
+        enabled: !launchAtLogin.enabled,
+      });
+      renderTasks(status, snapshot, hotkey, nextLaunchAtLogin, {
+        kind: 'info',
+        message: nextLaunchAtLogin.enabled
+          ? 'Launch at login enabled.'
+          : 'Launch at login disabled.',
+      });
+    } catch (error) {
+      renderTasks(status, snapshot, hotkey, launchAtLogin, {
+        kind: 'error',
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Could not update launch at login.',
       });
     }
   });
@@ -315,7 +354,7 @@ const renderTasks = (
 
       await loadTasks(status);
     } catch (error) {
-      renderTasks(status, snapshot, hotkey, {
+      renderTasks(status, snapshot, hotkey, launchAtLogin, {
         kind: 'error',
         message:
           error instanceof Error ? error.message : 'Could not update pause state.',
@@ -429,7 +468,13 @@ const render = (state: AppState) => {
       renderSetup(state.status, state.error);
       break;
     case 'tasks':
-      renderTasks(state.status, state.snapshot, state.hotkey, state.toast);
+      renderTasks(
+        state.status,
+        state.snapshot,
+        state.hotkey,
+        state.launchAtLogin,
+        state.toast,
+      );
       break;
     case 'error':
       renderError(state.status, state.error, state.hotkey);
@@ -442,8 +487,9 @@ const loadTasks = async (status: AuthStatus) => {
 
   try {
     const hotkey = await window.hotkey.getStatus();
+    const launchAtLogin = await window.settings.getLaunchAtLogin();
     const snapshot = await window.clickup.getMyTasks();
-    render({ view: 'tasks', status, snapshot, hotkey, toast: null });
+    render({ view: 'tasks', status, snapshot, hotkey, launchAtLogin, toast: null });
   } catch (error) {
     const hotkey = await window.hotkey.getStatus().catch(() => null);
     render({

@@ -11,6 +11,8 @@ import {
   session,
 } from 'electron';
 import Store from 'electron-store';
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
 
@@ -24,6 +26,7 @@ type AppStore = {
   activeTaskId?: string;
   isPaused?: boolean;
   hotkey?: string;
+  launchAtLogin?: boolean;
 };
 
 type ClickUpTask = {
@@ -56,6 +59,7 @@ type ClickUpSnapshot = {
   activeTaskStatuses: ClickUpStatus[];
   activeTaskId: string | null;
   isPaused: boolean;
+  isEmpty: boolean;
   source: 'team' | 'list';
   fetchedAt: string;
 };
@@ -66,6 +70,7 @@ const WINDOW_HEIGHT = 170;
 const DEV_WINDOW_HEIGHT = 230;
 const TASKS_PAGE_LIMIT = 100;
 const MAX_TASK_PAGES = 20;
+const MAX_FETCH_ATTEMPTS = 3;
 const DEFAULT_HOTKEY = 'CommandOrControl+Shift+K';
 const HOTKEY_OPTIONS = [
   DEFAULT_HOTKEY,
@@ -227,25 +232,67 @@ const clearToken = () => {
   return getAuthStatus();
 };
 
-const clickUpFetch = async (pathName: string, init?: RequestInit) => {
-  const authorization = await authProvider.currentAuthHeader();
-  const response = await fetch(`${CLICKUP_BASE_URL}${pathName}`, {
-    ...init,
-    headers: {
-      Authorization: authorization,
-      'Content-Type': 'application/json',
-      ...(init?.headers ?? {}),
-    },
+const delay = (milliseconds: number) =>
+  new Promise((resolve) => {
+    setTimeout(resolve, milliseconds);
   });
 
-  if (!response.ok) {
-    const body = await response.text();
-    const detail = body ? `: ${body.slice(0, 180)}` : '';
+const isRetryableStatus = (status: number) =>
+  status === 429 || status === 408 || status >= 500;
 
-    throw new Error(`ClickUp ${response.status} ${response.statusText}${detail}`);
+const clickUpFetch = async (pathName: string, init?: RequestInit) => {
+  const authorization = await authProvider.currentAuthHeader();
+
+  for (let attempt = 0; attempt < MAX_FETCH_ATTEMPTS; attempt += 1) {
+    try {
+      const response = await fetch(`${CLICKUP_BASE_URL}${pathName}`, {
+        ...init,
+        headers: {
+          Authorization: authorization,
+          'Content-Type': 'application/json',
+          ...(init?.headers ?? {}),
+        },
+      });
+
+      if (response.ok) {
+        const text = await response.text();
+
+        return text ? (JSON.parse(text) as unknown) : {};
+      }
+
+      const body = await response.text();
+      const detail = body ? `: ${body.slice(0, 180)}` : '';
+
+      if (isRetryableStatus(response.status) && attempt < MAX_FETCH_ATTEMPTS - 1) {
+        const retryAfter = Number(response.headers.get('retry-after'));
+        const waitMs = Number.isFinite(retryAfter)
+          ? retryAfter * 1000
+          : 500 * 2 ** attempt;
+
+        await delay(waitMs);
+        continue;
+      }
+
+      throw new Error(`ClickUp ${response.status} ${response.statusText}${detail}`);
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith('ClickUp ')) {
+        throw error;
+      }
+
+      if (attempt < MAX_FETCH_ATTEMPTS - 1) {
+        await delay(500 * 2 ** attempt);
+        continue;
+      }
+
+      if (error instanceof TypeError) {
+        throw new Error('Network unavailable. Check your connection and retry.');
+      }
+
+      throw error;
+    }
   }
 
-  return response.json() as Promise<unknown>;
+  throw new Error('ClickUp request failed after retries.');
 };
 
 const getCurrentUser = async () => {
@@ -410,6 +457,7 @@ const getMyTasks = async (): Promise<ClickUpSnapshot> => {
     activeTaskStatuses,
     activeTaskId: activeTask?.id ?? null,
     isPaused,
+    isEmpty: sortedTasks.length === 0,
     source,
     fetchedAt: new Date().toISOString(),
   };
@@ -487,6 +535,65 @@ const setHotkey = (payload: unknown) => {
   store.set('hotkey', accelerator);
 
   return registerConfiguredHotkey();
+};
+
+const linuxAutostartPath = () =>
+  path.join(os.homedir(), '.config', 'autostart', 'clickup-status-widget.desktop');
+
+const getLaunchAtLoginStatus = () => {
+  if (process.platform === 'linux') {
+    return {
+      enabled: fs.existsSync(linuxAutostartPath()),
+      supported: true,
+    };
+  }
+
+  return {
+    enabled: app.getLoginItemSettings().openAtLogin,
+    supported: true,
+  };
+};
+
+const writeLinuxAutostartEntry = () => {
+  const autostartPath = linuxAutostartPath();
+  fs.mkdirSync(path.dirname(autostartPath), { recursive: true });
+  fs.writeFileSync(
+    autostartPath,
+    [
+      '[Desktop Entry]',
+      'Type=Application',
+      'Name=ClickUp Status Widget',
+      `Exec="${process.execPath}"`,
+      'Hidden=false',
+      'NoDisplay=false',
+      'X-GNOME-Autostart-enabled=true',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+};
+
+const setLaunchAtLogin = (payload: unknown) => {
+  const data = asRecord(payload);
+  const enabled = data.enabled === true;
+  store.set('launchAtLogin', enabled);
+
+  if (process.platform === 'linux') {
+    if (enabled) {
+      writeLinuxAutostartEntry();
+    } else if (fs.existsSync(linuxAutostartPath())) {
+      fs.unlinkSync(linuxAutostartPath());
+    }
+
+    return getLaunchAtLoginStatus();
+  }
+
+  app.setLoginItemSettings({
+    openAtLogin: enabled,
+    openAsHidden: true,
+  });
+
+  return getLaunchAtLoginStatus();
 };
 
 const setTaskStatus = async (payload: unknown) => {
@@ -695,6 +802,10 @@ ipcMain.handle('clickup:setActiveTask', (_event, payload) => setActiveTask(paylo
 ipcMain.handle('clickup:pause', pauseActiveTask);
 ipcMain.handle('hotkey:getStatus', getHotkeyStatus);
 ipcMain.handle('hotkey:set', (_event, payload) => setHotkey(payload));
+ipcMain.handle('settings:getLaunchAtLogin', getLaunchAtLoginStatus);
+ipcMain.handle('settings:setLaunchAtLogin', (_event, payload) =>
+  setLaunchAtLogin(payload),
+);
 
 app.whenReady().then(() => {
   if (process.platform === 'darwin') {

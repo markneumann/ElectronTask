@@ -44,6 +44,7 @@ type ClickUpSnapshot = {
   activeTaskStatuses: ClickUpStatus[];
   activeTaskId: string | null;
   isPaused: boolean;
+  isEmpty: boolean;
   source: 'team' | 'list';
   fetchedAt: string;
 };
@@ -79,6 +80,15 @@ type SetHotkeyPayload = {
   accelerator: string;
 };
 
+type LaunchAtLoginStatus = {
+  enabled: boolean;
+  supported: boolean;
+};
+
+type SetLaunchAtLoginPayload = {
+  enabled: boolean;
+};
+
 interface Window {
   widget: {
     ping: () => Promise<WidgetPingResult>;
@@ -97,5 +107,11 @@ interface Window {
   hotkey: {
     getStatus: () => Promise<HotkeyStatus>;
     set: (payload: SetHotkeyPayload) => Promise<HotkeyStatus>;
+  };
+  settings: {
+    getLaunchAtLogin: () => Promise<LaunchAtLoginStatus>;
+    setLaunchAtLogin: (
+      payload: SetLaunchAtLoginPayload,
+    ) => Promise<LaunchAtLoginStatus>;
   };
 }

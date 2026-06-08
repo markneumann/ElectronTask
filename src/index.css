@@ -197,7 +197,7 @@ select:focus {
 .footer-row {
   flex: 0 0 24px;
   display: grid;
-  grid-template-columns: 1fr 112px;
+  grid-template-columns: 1fr 136px;
   align-items: center;
   gap: 8px;
   min-width: 0;
@@ -220,7 +220,7 @@ select:focus {
 
 .footer-actions {
   display: grid;
-  grid-template-columns: 24px 56px 24px;
+  grid-template-columns: 24px 24px 56px 24px;
   gap: 4px;
 }
 
@@ -286,6 +286,11 @@ button {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.icon-button.active {
+  color: #18181b;
+  background: #a3e635;
 }
 
 .ghost-button {

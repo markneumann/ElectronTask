@@ -26,3 +26,13 @@ contextBridge.exposeInMainWorld('hotkey', {
   set: (payload: SetHotkeyPayload) =>
     ipcRenderer.invoke('hotkey:set', payload) as Promise<HotkeyStatus>,
 });
+
+contextBridge.exposeInMainWorld('settings', {
+  getLaunchAtLogin: () =>
+    ipcRenderer.invoke('settings:getLaunchAtLogin') as Promise<LaunchAtLoginStatus>,
+  setLaunchAtLogin: (payload: SetLaunchAtLoginPayload) =>
+    ipcRenderer.invoke(
+      'settings:setLaunchAtLogin',
+      payload,
+    ) as Promise<LaunchAtLoginStatus>,
+});
