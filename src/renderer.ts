@@ -3,8 +3,18 @@ import './index.css';
 type AppState =
   | { view: 'loading'; status: AuthStatus | null; message: string }
   | { view: 'setup'; status: AuthStatus; error: string | null }
-  | { view: 'tasks'; status: AuthStatus; snapshot: ClickUpSnapshot }
+  | {
+      view: 'tasks';
+      status: AuthStatus;
+      snapshot: ClickUpSnapshot;
+      toast: ToastState | null;
+    }
   | { view: 'error'; status: AuthStatus; error: string };
+
+type ToastState = {
+  kind: 'info' | 'error';
+  message: string;
+};
 
 const root = document.getElementById('app');
 const nodeBlocked =
@@ -93,10 +103,45 @@ const renderSetup = (status: AuthStatus, error: string | null) => {
     });
 };
 
-const renderTasks = (status: AuthStatus, snapshot: ClickUpSnapshot) => {
+const taskWithStatus = (task: ClickUpTask, status: string): ClickUpTask => ({
+  ...task,
+  status,
+});
+
+const snapshotWithStatus = (
+  snapshot: ClickUpSnapshot,
+  taskId: string,
+  status: string,
+): ClickUpSnapshot => ({
+  ...snapshot,
+  activeTask:
+    snapshot.activeTask?.id === taskId
+      ? taskWithStatus(snapshot.activeTask, status)
+      : snapshot.activeTask,
+  tasks: snapshot.tasks.map((task) =>
+    task.id === taskId ? taskWithStatus(task, status) : task,
+  ),
+});
+
+const renderTasks = (
+  status: AuthStatus,
+  snapshot: ClickUpSnapshot,
+  toast: ToastState | null,
+) => {
   const activeTask = snapshot.activeTask;
   const sourceLabel =
     snapshot.source === 'list' ? 'Configured list' : `${snapshot.teams.length} workspace`;
+  const canChangeStatus = Boolean(
+    activeTask?.listId && snapshot.activeTaskStatuses.length > 0,
+  );
+  const options = snapshot.activeTaskStatuses
+    .map(
+      (statusOption) =>
+        `<option value="${escapeHtml(statusOption.name)}" ${
+          statusOption.name === activeTask?.status ? 'selected' : ''
+        }>${escapeHtml(statusOption.name)}</option>`,
+    )
+    .join('');
 
   renderShell(`
     <section class="task-summary" aria-label="Current ClickUp task">
@@ -109,18 +154,54 @@ const renderTasks = (status: AuthStatus, snapshot: ClickUpSnapshot) => {
         ${escapeHtml(activeTask?.listName ?? sourceLabel)}
       </p>
     </section>
-    <section class="security-grid" aria-label="Read path checks">
-      <div>
-        <span>Tasks</span>
-        <strong>${snapshot.tasks.length}</strong>
-      </div>
-      <div>
-        <span>Node</span>
-        <strong>${nodeBlocked ? 'Blocked' : 'Exposed'}</strong>
-      </div>
+    ${
+      canChangeStatus
+        ? `<label class="status-control">
+            <span>Status</span>
+            <select id="status-select" aria-label="Change task status">${options}</select>
+          </label>`
+        : `<p class="notice">No list statuses available for this task.</p>`
+    }
+    <section class="footer-row">
+      <span>${snapshot.tasks.length} tasks &middot; Node ${nodeBlocked ? 'blocked' : 'exposed'}</span>
+      <button id="disconnect" class="ghost-button" type="button">Forget</button>
     </section>
-    <button id="disconnect" class="ghost-button" type="button">Forget token</button>
+    ${toast ? `<p class="toast ${toast.kind}">${escapeHtml(toast.message)}</p>` : ''}
   `);
+
+  document.getElementById('status-select')?.addEventListener('change', async (event) => {
+    const select = event.currentTarget as HTMLSelectElement;
+    const nextStatus = select.value;
+
+    if (!activeTask?.listId || nextStatus === activeTask.status) {
+      return;
+    }
+
+    const previousSnapshot = snapshot;
+    const optimisticSnapshot = snapshotWithStatus(snapshot, activeTask.id, nextStatus);
+    renderTasks(status, optimisticSnapshot, {
+      kind: 'info',
+      message: 'Updating status...',
+    });
+
+    try {
+      await window.clickup.setStatus({
+        taskId: activeTask.id,
+        listId: activeTask.listId,
+        status: nextStatus,
+      });
+      renderTasks(status, optimisticSnapshot, {
+        kind: 'info',
+        message: 'Status updated.',
+      });
+    } catch (error) {
+      renderTasks(status, previousSnapshot, {
+        kind: 'error',
+        message:
+          error instanceof Error ? error.message : 'Could not update status.',
+      });
+    }
+  });
 
   document.getElementById('disconnect')?.addEventListener('click', async () => {
     const nextStatus = await window.auth.clearToken();
@@ -160,7 +241,7 @@ const render = (state: AppState) => {
       renderSetup(state.status, state.error);
       break;
     case 'tasks':
-      renderTasks(state.status, state.snapshot);
+      renderTasks(state.status, state.snapshot, state.toast);
       break;
     case 'error':
       renderError(state.status, state.error);
@@ -173,7 +254,7 @@ const loadTasks = async (status: AuthStatus) => {
 
   try {
     const snapshot = await window.clickup.getMyTasks();
-    render({ view: 'tasks', status, snapshot });
+    render({ view: 'tasks', status, snapshot, toast: null });
   } catch (error) {
     render({
       view: 'error',

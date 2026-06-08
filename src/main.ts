@@ -31,6 +31,11 @@ type ClickUpTask = {
   dateUpdated: number;
 };
 
+type ClickUpStatus = {
+  name: string;
+  color: string | null;
+};
+
 type ClickUpTeam = {
   id: string;
   name: string;
@@ -44,6 +49,7 @@ type ClickUpSnapshot = {
   teams: ClickUpTeam[];
   tasks: ClickUpTask[];
   activeTask: ClickUpTask | null;
+  activeTaskStatuses: ClickUpStatus[];
   source: 'team' | 'list';
   fetchedAt: string;
 };
@@ -328,6 +334,31 @@ const getTasksFromTeams = async (teams: ClickUpTeam[], userId: string) => {
   return taskGroups.flat();
 };
 
+const getListStatuses = async (listId: string) => {
+  const body = asRecord(await clickUpFetch(`/list/${encodeURIComponent(listId)}`));
+  const statuses = asArray(body.statuses)
+    .map((status) => {
+      const record = asRecord(status);
+      const name = stringValue(record.status);
+
+      if (!name) {
+        return null;
+      }
+
+      return {
+        name,
+        color: stringValue(record.color),
+      };
+    })
+    .filter((status): status is ClickUpStatus => Boolean(status));
+
+  if (statuses.length === 0) {
+    throw new Error(`No statuses were returned for ClickUp list ${listId}.`);
+  }
+
+  return statuses;
+};
+
 const getMyTasks = async (): Promise<ClickUpSnapshot> => {
   const user = await getCurrentUser();
   const teams = await getTeams();
@@ -337,14 +368,49 @@ const getMyTasks = async (): Promise<ClickUpSnapshot> => {
     ? await getTasksFromList(defaultListId, user.id)
     : await getTasksFromTeams(teams, user.id);
   const sortedTasks = tasks.sort((left, right) => right.dateUpdated - left.dateUpdated);
+  const activeTask = sortedTasks[0] ?? null;
+  const activeTaskStatuses = activeTask?.listId
+    ? await getListStatuses(activeTask.listId)
+    : [];
 
   return {
     user,
     teams,
     tasks: sortedTasks,
-    activeTask: sortedTasks[0] ?? null,
+    activeTask,
+    activeTaskStatuses,
     source,
     fetchedAt: new Date().toISOString(),
+  };
+};
+
+const setTaskStatus = async (payload: unknown) => {
+  const data = asRecord(payload);
+  const taskId = trimString(data.taskId);
+  const listId = trimString(data.listId);
+  const statusName = trimString(data.status);
+
+  if (!taskId || !listId || !statusName) {
+    throw new Error('Task id, list id, and status are required.');
+  }
+
+  const statuses = await getListStatuses(listId);
+  const requestedStatus = statuses.find((status) => status.name === statusName);
+
+  if (!requestedStatus) {
+    throw new Error(`"${statusName}" is not a valid status for list ${listId}.`);
+  }
+
+  await clickUpFetch(`/task/${encodeURIComponent(taskId)}`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      status: requestedStatus.name,
+    }),
+  });
+
+  return {
+    taskId,
+    status: requestedStatus.name,
   };
 };
 
@@ -519,6 +585,7 @@ ipcMain.handle('auth:getStatus', getAuthStatus);
 ipcMain.handle('auth:saveToken', (_event, payload) => saveToken(payload));
 ipcMain.handle('auth:clearToken', clearToken);
 ipcMain.handle('clickup:getMyTasks', getMyTasks);
+ipcMain.handle('clickup:setStatus', (_event, payload) => setTaskStatus(payload));
 
 app.whenReady().then(() => {
   if (process.platform === 'darwin') {

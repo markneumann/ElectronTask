@@ -25,6 +25,11 @@ type ClickUpTask = {
   dateUpdated: number;
 };
 
+type ClickUpStatus = {
+  name: string;
+  color: string | null;
+};
+
 type ClickUpSnapshot = {
   user: {
     id: string;
@@ -36,8 +41,20 @@ type ClickUpSnapshot = {
   }>;
   tasks: ClickUpTask[];
   activeTask: ClickUpTask | null;
+  activeTaskStatuses: ClickUpStatus[];
   source: 'team' | 'list';
   fetchedAt: string;
+};
+
+type SetStatusPayload = {
+  taskId: string;
+  listId: string;
+  status: string;
+};
+
+type SetStatusResult = {
+  taskId: string;
+  status: string;
 };
 
 interface Window {
@@ -51,5 +68,6 @@ interface Window {
   };
   clickup: {
     getMyTasks: () => Promise<ClickUpSnapshot>;
+    setStatus: (payload: SetStatusPayload) => Promise<SetStatusResult>;
   };
 }

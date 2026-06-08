@@ -14,4 +14,6 @@ contextBridge.exposeInMainWorld('auth', {
 contextBridge.exposeInMainWorld('clickup', {
   getMyTasks: () =>
     ipcRenderer.invoke('clickup:getMyTasks') as Promise<ClickUpSnapshot>,
+  setStatus: (payload: SetStatusPayload) =>
+    ipcRenderer.invoke('clickup:setStatus', payload) as Promise<SetStatusResult>,
 });
