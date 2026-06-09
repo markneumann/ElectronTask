@@ -66,7 +66,7 @@ type ClickUpSnapshot = {
 };
 
 const CLICKUP_BASE_URL = 'https://api.clickup.com/api/v2';
-const WINDOW_WIDTH = 1400;
+const WINDOW_WIDTH = 1260;
 const WINDOW_HEIGHT = 30;
 const DEV_WINDOW_HEIGHT = WINDOW_HEIGHT;
 const TASKS_PAGE_LIMIT = 100;

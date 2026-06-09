@@ -28,6 +28,7 @@ textarea {
 }
 
 .widget-shell {
+  position: relative;
   width: 100vw;
   height: 100vh;
   padding: 2px 6px;
@@ -41,7 +42,7 @@ textarea {
     0 18px 48px rgba(0, 0, 0, 0.38),
     0 1px 0 rgba(255, 255, 255, 0.08) inset;
   display: grid;
-  grid-template-columns: minmax(500px, 1.4fr) minmax(650px, 1.8fr) minmax(232px, auto);
+  grid-template-columns: minmax(420px, 1.4fr) minmax(520px, 1.8fr) minmax(150px, auto);
   align-items: center;
   gap: 6px;
   -webkit-app-region: drag;
@@ -58,7 +59,7 @@ textarea {
 
 .task-summary {
   display: grid;
-  grid-template-columns: auto auto minmax(140px, 1fr) auto minmax(110px, 0.38fr);
+  grid-template-columns: auto auto minmax(120px, 1fr) auto minmax(90px, 0.38fr);
   align-items: center;
   gap: 6px;
   flex: 0 1 auto;
@@ -69,6 +70,15 @@ textarea {
   display: flex;
   flex-direction: column;
   justify-content: center;
+}
+
+.task-summary.centered h1,
+.task-summary.centered .task-name {
+  max-width: 100%;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .status-dot {
@@ -188,7 +198,7 @@ h1 {
 
 .picker-row {
   display: grid;
-  grid-template-columns: minmax(300px, 1.7fr) minmax(150px, 0.8fr);
+  grid-template-columns: minmax(280px, 1.7fr) minmax(140px, 0.8fr);
   align-items: center;
   gap: 6px;
   min-width: 0;
@@ -239,7 +249,7 @@ select:focus {
 .footer-row {
   flex: 0 0 auto;
   display: grid;
-  grid-template-columns: 93px;
+  grid-template-columns: 48px 93px;
   align-items: center;
   gap: 6px;
   min-width: 0;
@@ -259,6 +269,18 @@ select:focus {
   display: grid;
   grid-template-columns: 20px 20px 46px 20px;
   gap: 3px;
+}
+
+.timer-readout {
+  min-width: 0;
+  color: #e7e5e4;
+  font-size: 9px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .refresh-button::before {
@@ -423,7 +445,10 @@ label,
 }
 
 .toast {
-  grid-column: 1 / -1;
+  position: absolute;
+  right: 165px;
+  bottom: 2px;
+  max-width: 360px;
   margin: 0;
   font-size: 8px;
   line-height: 1.2;

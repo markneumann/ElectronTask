@@ -26,6 +26,7 @@ type ToastState = {
 };
 
 const root = document.getElementById('app');
+let timerStartedAt = Date.now();
 
 const escapeHtml = (value: string | null) =>
   (value ?? '')
@@ -43,15 +44,35 @@ const renderShell = (content: string) => {
   root.innerHTML = `<main class="widget-shell">${content}</main>`;
 };
 
+const formatTimer = () => {
+  const elapsedHours = Math.floor((Date.now() - timerStartedAt) / 3_600_000);
+  const days = Math.floor(elapsedHours / 24);
+  const hours = elapsedHours % 24;
+
+  return `${String(days).padStart(2, '0')}:${String(hours).padStart(2, '0')}`;
+};
+
+const updateTimerElements = () => {
+  document.querySelectorAll<HTMLElement>('[data-timer-readout]').forEach((element) => {
+    element.textContent = formatTimer();
+  });
+};
+
+const resetTimer = () => {
+  timerStartedAt = Date.now();
+  updateTimerElements();
+};
+
+window.setInterval(updateTimerElements, 1_000);
+
 const renderLoading = (message: string) => {
   renderShell(`
-    <section class="task-summary centered" aria-label="Loading">
-      <div class="status-row">
-        <span class="status-dot" aria-hidden="true"></span>
-        <span class="status-label">M1 read path</span>
-      </div>
+    <section class="task-summary" aria-label="Loading">
+      <span class="status-dot" aria-hidden="true"></span>
+      <span class="status-label">Refreshing</span>
       <h1>ClickUp Status</h1>
-      <p class="task-name">${escapeHtml(message)}</p>
+      <span class="list-label">State</span>
+      <span class="task-name">${escapeHtml(message)}</span>
     </section>
   `);
 };
@@ -287,6 +308,7 @@ const renderTasks = (
       }
     </section>
     <section class="footer-row">
+      <span class="timer-readout" data-timer-readout title="Time on current state">${formatTimer()}</span>
       <div class="footer-actions">
         <button id="refresh" class="icon-button refresh-button" type="button" title="Refresh" aria-label="Refresh"></button>
         <button id="options" class="icon-button" type="button" title="Options" aria-label="Options">...</button>
@@ -319,6 +341,7 @@ const renderTasks = (
         await window.clickup.pause();
       }
 
+      resetTimer();
       await loadTasks(status);
     } catch (error) {
       renderTasks(status, snapshot, hotkey, launchAtLogin, {
@@ -414,6 +437,7 @@ const renderTasks = (
         await window.clickup.pause();
       }
 
+      resetTimer();
       await loadTasks(status);
     } catch (error) {
       renderTasks(status, snapshot, hotkey, launchAtLogin, {
@@ -525,7 +549,7 @@ const render = (state: AppState) => {
 };
 
 const loadTasks = async (status: AuthStatus) => {
-  render({ view: 'loading', status, message: 'Loading assigned tasks...' });
+  render({ view: 'loading', status, message: 'Loading tasks...' });
 
   try {
     const hotkey = await window.hotkey.getStatus();
