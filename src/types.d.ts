@@ -97,6 +97,10 @@ type SetLaunchAtLoginPayload = {
   enabled: boolean;
 };
 
+type SetDefaultListIdPayload = {
+  defaultListId: string | null;
+};
+
 interface Window {
   widget: {
     ping: () => Promise<WidgetPingResult>;
@@ -122,5 +126,8 @@ interface Window {
     setLaunchAtLogin: (
       payload: SetLaunchAtLoginPayload,
     ) => Promise<LaunchAtLoginStatus>;
+    setDefaultListId: (payload: SetDefaultListIdPayload) => Promise<AuthStatus>;
+    showOptionsMenu: () => Promise<void>;
+    onConfigureList: (callback: () => void) => void;
   };
 }

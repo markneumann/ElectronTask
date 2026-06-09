@@ -37,4 +37,13 @@ contextBridge.exposeInMainWorld('settings', {
       'settings:setLaunchAtLogin',
       payload,
     ) as Promise<LaunchAtLoginStatus>,
+  setDefaultListId: (payload: SetDefaultListIdPayload) =>
+    ipcRenderer.invoke('settings:setDefaultListId', payload) as Promise<AuthStatus>,
+  showOptionsMenu: () =>
+    ipcRenderer.invoke('settings:showOptionsMenu') as Promise<void>,
+  onConfigureList: (callback: () => void) => {
+    ipcRenderer.on('settings:configureList', () => {
+      callback();
+    });
+  },
 });

@@ -110,6 +110,67 @@ const renderSetup = (status: AuthStatus, error: string | null) => {
     });
 };
 
+const renderListConfig = (status: AuthStatus, error: string | null = null) => {
+  renderShell(`
+    <form id="list-config-form" class="list-config-form" autocomplete="off">
+      <span class="status-dot" aria-hidden="true"></span>
+      <label for="list-id">List</label>
+      <input
+        id="list-id"
+        name="listId"
+        type="text"
+        placeholder="ClickUp list id"
+        autocomplete="off"
+        value="${escapeHtml(status.defaultListId)}"
+      />
+      <button id="save-list" type="submit">Save</button>
+      <button id="clear-list" class="ghost-button" type="button">All</button>
+      <button id="cancel-list" class="ghost-button" type="button">Cancel</button>
+      ${error ? `<p class="notice error">${escapeHtml(error)}</p>` : ''}
+    </form>
+  `);
+
+  document.getElementById('list-id')?.focus();
+
+  document
+    .getElementById('list-config-form')
+    ?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const form = new FormData(event.currentTarget as HTMLFormElement);
+      const listId = String(form.get('listId') ?? '').trim() || null;
+
+      try {
+        const nextStatus = await window.settings.setDefaultListId({
+          defaultListId: listId,
+        });
+        await loadTasks(nextStatus);
+      } catch (error) {
+        renderListConfig(
+          status,
+          error instanceof Error ? error.message : 'Could not update list.',
+        );
+      }
+    });
+
+  document.getElementById('clear-list')?.addEventListener('click', async () => {
+    try {
+      const nextStatus = await window.settings.setDefaultListId({
+        defaultListId: null,
+      });
+      await loadTasks(nextStatus);
+    } catch (error) {
+      renderListConfig(
+        status,
+        error instanceof Error ? error.message : 'Could not clear list.',
+      );
+    }
+  });
+
+  document.getElementById('cancel-list')?.addEventListener('click', () => {
+    loadTasks(status);
+  });
+};
+
 const taskWithStatus = (task: ClickUpTask, status: string): ClickUpTask => ({
   ...task,
   status,
@@ -172,15 +233,6 @@ const renderTasks = (
         }>${escapeHtml(statusOption.name)}</option>`,
     )
     .join('');
-  const hotkeyOptions = hotkey.options
-    .map(
-      (option) =>
-        `<option value="${escapeHtml(option)}" ${
-          option === hotkey.accelerator ? 'selected' : ''
-        }>${escapeHtml(option)}</option>`,
-    )
-    .join('');
-
   renderShell(`
     <section class="task-summary" aria-label="Current ClickUp task">
       <span class="status-dot ${snapshot.isPaused ? 'warn' : ''}" aria-hidden="true"></span>
@@ -191,13 +243,18 @@ const renderTasks = (
             ? 'Paused'
             : activeTask?.status ?? 'No open task',
       )}</span>
-      <h1>${escapeHtml(
-        snapshot.isEmpty
-          ? 'No assigned tasks'
-          : snapshot.isPaused
-            ? 'No active task'
-            : activeTask?.name ?? 'No assigned task',
-      )}</h1>
+      ${
+        activeTask && !snapshot.isPaused
+          ? `<button id="open-task-title" class="task-title-button" type="button" title="Open task in ClickUp">${escapeHtml(activeTask.name)}</button>`
+          : `<h1>${escapeHtml(
+              snapshot.isEmpty
+                ? 'No assigned tasks'
+                : snapshot.isPaused
+                  ? 'No active task'
+                  : 'No assigned task',
+            )}</h1>`
+      }
+      <span class="list-label">List</span>
       <span class="task-name">
         ${escapeHtml(
           snapshot.isEmpty
@@ -230,13 +287,9 @@ const renderTasks = (
       }
     </section>
     <section class="footer-row">
-      <select id="hotkey-select" class="hotkey-select" aria-label="Global hotkey" title="Global hotkey">
-        ${hotkeyOptions}
-      </select>
       <div class="footer-actions">
-        <button id="refresh" class="icon-button" type="button" title="Refresh">R</button>
-        <button id="open-task" class="icon-button" type="button" title="Open selected task in ClickUp">O</button>
-        <button id="launch-login" class="icon-button ${launchAtLogin.enabled ? 'active' : ''}" type="button" title="Launch at login">L</button>
+        <button id="refresh" class="icon-button refresh-button" type="button" title="Refresh" aria-label="Refresh"></button>
+        <button id="options" class="icon-button" type="button" title="Options" aria-label="Options">...</button>
         <button id="pause" class="icon-button" type="button" title="${snapshot.isPaused ? 'Resume first task' : 'Pause'}">${snapshot.isPaused ? 'Play' : 'Pause'}</button>
         <button id="disconnect" class="icon-button" type="button" title="Forget token">X</button>
       </div>
@@ -336,45 +389,15 @@ const renderTasks = (
     }
   };
 
-  document.getElementById('open-task')?.addEventListener('click', openActiveTask);
+  document.getElementById('open-task-title')?.addEventListener('click', openActiveTask);
 
-  document.getElementById('hotkey-select')?.addEventListener('change', async (event) => {
-    const select = event.currentTarget as HTMLSelectElement;
-
+  document.getElementById('options')?.addEventListener('click', async () => {
     try {
-      const nextHotkey = await window.hotkey.set({
-        accelerator: select.value,
-      });
-      renderTasks(status, snapshot, nextHotkey, launchAtLogin, {
-        kind: nextHotkey.registered ? 'info' : 'error',
-        message: nextHotkey.registered ? 'Hotkey updated.' : 'Hotkey unavailable.',
-      });
+      await window.settings.showOptionsMenu();
     } catch (error) {
       renderTasks(status, snapshot, hotkey, launchAtLogin, {
         kind: 'error',
-        message: error instanceof Error ? error.message : 'Could not update hotkey.',
-      });
-    }
-  });
-
-  document.getElementById('launch-login')?.addEventListener('click', async () => {
-    try {
-      const nextLaunchAtLogin = await window.settings.setLaunchAtLogin({
-        enabled: !launchAtLogin.enabled,
-      });
-      renderTasks(status, snapshot, hotkey, nextLaunchAtLogin, {
-        kind: 'info',
-        message: nextLaunchAtLogin.enabled
-          ? 'Launch at login enabled.'
-          : 'Launch at login disabled.',
-      });
-    } catch (error) {
-      renderTasks(status, snapshot, hotkey, launchAtLogin, {
-        kind: 'error',
-        message:
-          error instanceof Error
-            ? error.message
-            : 'Could not update launch at login.',
+        message: error instanceof Error ? error.message : 'Could not open options.',
       });
     }
   });
@@ -407,36 +430,18 @@ const renderTasks = (
   });
 };
 
-const hotkeyOptionsHtml = (hotkey: HotkeyStatus) =>
-  hotkey.options
-    .map(
-      (option) =>
-        `<option value="${escapeHtml(option)}" ${
-          option === hotkey.accelerator ? 'selected' : ''
-        }>${escapeHtml(option)}</option>`,
-    )
-    .join('');
-
 const attachHotkeyControl = (
   status: AuthStatus,
-  hotkey: HotkeyStatus,
   onRender: (nextHotkey: HotkeyStatus, toast: ToastState | null) => void,
 ) => {
-  document.getElementById('hotkey-select')?.addEventListener('change', async (event) => {
-    const select = event.currentTarget as HTMLSelectElement;
-
+  document.getElementById('options')?.addEventListener('click', async () => {
     try {
-      const nextHotkey = await window.hotkey.set({
-        accelerator: select.value,
-      });
-      onRender(nextHotkey, {
-        kind: nextHotkey.registered ? 'info' : 'error',
-        message: nextHotkey.registered ? 'Hotkey updated.' : 'Hotkey unavailable.',
-      });
+      await window.settings.showOptionsMenu();
     } catch (error) {
+      const hotkey = await window.hotkey.getStatus();
       onRender(hotkey, {
         kind: 'error',
-        message: error instanceof Error ? error.message : 'Could not update hotkey.',
+        message: error instanceof Error ? error.message : 'Could not open options.',
       });
     }
   });
@@ -464,11 +469,9 @@ const renderError = (
     ${
       hotkey
         ? `<section class="footer-row">
-            <select id="hotkey-select" class="hotkey-select" aria-label="Global hotkey" title="Global hotkey">
-              ${hotkeyOptionsHtml(hotkey)}
-            </select>
             <div class="footer-actions">
-              <button id="refresh" class="icon-button" type="button" title="Retry">R</button>
+              <button id="refresh" class="icon-button refresh-button" type="button" title="Retry" aria-label="Retry"></button>
+              <button id="options" class="icon-button" type="button" title="Options" aria-label="Options">...</button>
               <button id="disconnect" class="icon-button" type="button" title="Forget token">X</button>
             </div>
           </section>`
@@ -488,7 +491,7 @@ const renderError = (
 
   document.getElementById('retry')?.addEventListener('click', loadApp);
   if (hotkey) {
-    attachHotkeyControl(status, hotkey, (nextHotkey, nextToast) => {
+    attachHotkeyControl(status, (nextHotkey, nextToast) => {
       renderError(status, error, nextHotkey, nextToast);
     });
   }
@@ -571,3 +574,22 @@ window.widget
   .ping()
   .then(loadApp)
   .catch(() => renderLoading('Main process unavailable.'));
+
+window.settings.onConfigureList(async () => {
+  try {
+    const status = await window.auth.getStatus();
+    renderListConfig(status);
+  } catch (error) {
+    const status = await window.auth.getStatus();
+    const message =
+      error instanceof Error ? error.message : 'Could not update list setting.';
+
+    if (!status.hasToken) {
+      renderSetup(status, message);
+      return;
+    }
+
+    const hotkey = await window.hotkey.getStatus().catch(() => null);
+    renderError(status, message, hotkey);
+  }
+});

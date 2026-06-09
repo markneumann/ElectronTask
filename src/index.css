@@ -58,7 +58,7 @@ textarea {
 
 .task-summary {
   display: grid;
-  grid-template-columns: auto auto minmax(140px, 1fr) minmax(110px, 0.42fr);
+  grid-template-columns: auto auto minmax(140px, 1fr) auto minmax(110px, 0.38fr);
   align-items: center;
   gap: 6px;
   flex: 0 1 auto;
@@ -110,6 +110,21 @@ h1 {
   -webkit-line-clamp: 1;
 }
 
+.task-title-button {
+  min-width: 0;
+  height: auto;
+  padding: 0;
+  color: #fafaf9;
+  background: transparent;
+  font-size: 11px;
+  font-weight: 760;
+  line-height: 1.12;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .task-name {
   min-width: 0;
   margin: 0;
@@ -120,6 +135,18 @@ h1 {
   overflow: hidden;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 1;
+}
+
+.list-label {
+  min-width: 0;
+  color: #a8a29e;
+  font-size: 9px;
+  line-height: 1;
+  font-weight: 700;
+  text-transform: uppercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .security-grid {
@@ -189,15 +216,20 @@ h1 {
 select {
   width: 100%;
   min-width: 0;
-  height: 18px;
-  padding: 0 5px;
+  height: 16px;
+  padding: 0 4px;
   color: #fafaf9;
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 5px;
-  font-size: 9px;
+  font-size: 8px;
   line-height: 1;
   outline: none;
+}
+
+.task-picker select,
+.status-control select {
+  appearance: none;
 }
 
 select:focus {
@@ -207,7 +239,7 @@ select:focus {
 .footer-row {
   flex: 0 0 auto;
   display: grid;
-  grid-template-columns: 84px 142px;
+  grid-template-columns: 93px;
   align-items: center;
   gap: 6px;
   min-width: 0;
@@ -222,16 +254,21 @@ select:focus {
   white-space: nowrap;
 }
 
-.hotkey-select {
-  height: 18px;
-  padding: 0 6px;
-  font-size: 9px;
+.footer-actions {
+  position: relative;
+  display: grid;
+  grid-template-columns: 20px 20px 46px 20px;
+  gap: 3px;
 }
 
-.footer-actions {
-  display: grid;
-  grid-template-columns: 20px 20px 20px 46px 20px;
-  gap: 3px;
+.refresh-button::before {
+  content: "";
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border: 1.5px solid currentColor;
+  border-left-color: transparent;
+  border-radius: 999px;
 }
 
 .setup-form {
@@ -240,6 +277,30 @@ select:focus {
   grid-template-columns: 140px minmax(180px, 1fr) minmax(140px, 0.7fr) 150px 90px;
   align-items: center;
   gap: 6px;
+}
+
+.list-config-form {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: auto auto minmax(240px, 1fr) 48px 38px 54px minmax(120px, 0.6fr);
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  -webkit-app-region: no-drag;
+}
+
+.list-config-form label {
+  color: #a8a29e;
+  font-size: 9px;
+  line-height: 1;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.list-config-form button {
+  height: 18px;
+  padding: 0 6px;
+  font-size: 9px;
 }
 
 .setup-form .status-row {
@@ -257,6 +318,12 @@ input[type="text"] {
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 6px;
   outline: none;
+}
+
+.list-config-form input[type="text"] {
+  height: 18px;
+  padding: 0 6px;
+  font-size: 9px;
 }
 
 input[type="password"]:focus,
@@ -330,7 +397,7 @@ button {
 label,
 .picker-row,
 .footer-actions,
-.task-open-link {
+.task-title-button {
   -webkit-app-region: no-drag;
 }
 

@@ -177,7 +177,10 @@ const getDecryptedToken = () => {
   }
 
   try {
-    return safeStorage.decryptString(Buffer.from(encryptedToken, 'base64'));
+    const token = safeStorage.decryptString(Buffer.from(encryptedToken, 'base64'));
+    sessionToken = token;
+
+    return token;
   } catch {
     return null;
   }
@@ -220,7 +223,7 @@ const saveToken = (payload: unknown) => {
   }
 
   const encryptedToken = safeStorage.encryptString(token).toString('base64');
-  sessionToken = null;
+  sessionToken = token;
   store.set('encryptedToken', encryptedToken);
 
   return getAuthStatus();
@@ -229,6 +232,22 @@ const saveToken = (payload: unknown) => {
 const clearToken = () => {
   sessionToken = null;
   store.delete('encryptedToken');
+
+  return getAuthStatus();
+};
+
+const setDefaultListId = (payload: unknown) => {
+  const data = asRecord(payload);
+  const defaultListId = trimString(data.defaultListId);
+
+  if (defaultListId) {
+    store.set('defaultListId', defaultListId);
+  } else {
+    store.delete('defaultListId');
+  }
+
+  store.delete('activeTaskId');
+  store.set('isPaused', false);
 
   return getAuthStatus();
 };
@@ -612,6 +631,44 @@ const setLaunchAtLogin = (payload: unknown) => {
   return getLaunchAtLoginStatus();
 };
 
+const showOptionsMenu = (window: BrowserWindow | null) => {
+  const activeHotkey = getConfiguredHotkey();
+  const launchAtLogin = getLaunchAtLoginStatus();
+  const menu = Menu.buildFromTemplate([
+    {
+      label: 'Show / hide hotkey',
+      submenu: HOTKEY_OPTIONS.map((accelerator) => ({
+        label: accelerator,
+        type: 'radio',
+        checked: accelerator === activeHotkey,
+        click: () => {
+          setHotkey({ accelerator });
+        },
+      })),
+    },
+    {
+      label: 'Configure List...',
+      click: () => {
+        window?.webContents.send('settings:configureList');
+      },
+    },
+    { type: 'separator' },
+    {
+      label: 'Launch on Startup',
+      type: 'checkbox',
+      checked: launchAtLogin.enabled,
+      enabled: launchAtLogin.supported,
+      click: (item) => {
+        setLaunchAtLogin({ enabled: item.checked });
+      },
+    },
+  ]);
+
+  menu.popup({
+    window: window ?? undefined,
+  });
+};
+
 const setTaskStatus = async (payload: unknown) => {
   const data = asRecord(payload);
   const taskId = trimString(data.taskId);
@@ -815,6 +872,12 @@ ipcMain.handle('settings:getLaunchAtLogin', getLaunchAtLoginStatus);
 ipcMain.handle('settings:setLaunchAtLogin', (_event, payload) =>
   setLaunchAtLogin(payload),
 );
+ipcMain.handle('settings:setDefaultListId', (_event, payload) =>
+  setDefaultListId(payload),
+);
+ipcMain.handle('settings:showOptionsMenu', (event) => {
+  showOptionsMenu(BrowserWindow.fromWebContents(event.sender));
+});
 
 app.whenReady().then(() => {
   if (process.platform === 'darwin') {
