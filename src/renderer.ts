@@ -27,6 +27,8 @@ type ToastState = {
 
 const root = document.getElementById('app');
 let timerStartedAt = Date.now();
+let timerBaseMs = 0;
+let timedStateId: string | null = null;
 
 const escapeHtml = (value: string | null) =>
   (value ?? '')
@@ -45,7 +47,7 @@ const renderShell = (content: string) => {
 };
 
 const formatTimer = () => {
-  const elapsedMinutes = Math.floor((Date.now() - timerStartedAt) / 60_000);
+  const elapsedMinutes = Math.floor((timerBaseMs + Date.now() - timerStartedAt) / 60_000);
   const days = Math.floor(elapsedMinutes / 1_440);
   const hours = Math.floor((elapsedMinutes % 1_440) / 60);
   const minutes = elapsedMinutes % 60;
@@ -65,10 +67,43 @@ const updateTimerElements = () => {
 
 const resetTimer = () => {
   timerStartedAt = Date.now();
+  timerBaseMs = 0;
   updateTimerElements();
 };
 
 window.setInterval(updateTimerElements, 1_000);
+
+const syncTimerToSnapshot = (snapshot: ClickUpSnapshot) => {
+  const activeTask = snapshot.isPaused ? null : snapshot.activeTask;
+  const nextTimedStateId = activeTask?.id ?? null;
+
+  if (nextTimedStateId === timedStateId) {
+    return;
+  }
+
+  timedStateId = nextTimedStateId;
+  timerBaseMs = activeTask?.timeSpentMs ?? 0;
+  timerStartedAt = Date.now();
+};
+
+const recordCurrentTaskTime = async (task: ClickUpTask | null) => {
+  if (!task) {
+    resetTimer();
+    timedStateId = null;
+    return;
+  }
+
+  const elapsedMs = Date.now() - timerStartedAt;
+  await window.clickup.recordTimeSpent({
+    taskId: task.id,
+    teamId: task.teamId,
+    elapsedMs,
+    startedAt: timerStartedAt,
+  });
+  timerBaseMs += elapsedMs;
+  timerStartedAt = Date.now();
+  updateTimerElements();
+};
 
 const renderLoading = (message: string) => {
   renderShell(`
@@ -235,6 +270,7 @@ const renderTasks = (
   launchAtLogin: LaunchAtLoginStatus,
   toast: ToastState | null,
 ) => {
+  syncTimerToSnapshot(snapshot);
   const activeTask = snapshot.activeTask;
   const sourceLabel =
     snapshot.source === 'list' ? 'Configured list' : `${snapshot.teams.length} workspace`;
@@ -340,13 +376,13 @@ const renderTasks = (
     });
 
     try {
+      await recordCurrentTaskTime(activeTask);
       if (taskId) {
         await window.clickup.setActiveTask({ taskId });
       } else {
         await window.clickup.pause();
       }
 
-      resetTimer();
       await loadTasks(status);
     } catch (error) {
       renderTasks(status, snapshot, hotkey, launchAtLogin, {
@@ -432,6 +468,7 @@ const renderTasks = (
 
   document.getElementById('pause')?.addEventListener('click', async () => {
     try {
+      await recordCurrentTaskTime(activeTask);
       if (snapshot.isPaused) {
         const firstTask = snapshot.tasks[0];
 
@@ -442,7 +479,6 @@ const renderTasks = (
         await window.clickup.pause();
       }
 
-      resetTimer();
       await loadTasks(status);
     } catch (error) {
       renderTasks(status, snapshot, hotkey, launchAtLogin, {

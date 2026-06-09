@@ -20,9 +20,11 @@ type ClickUpTask = {
   id: string;
   name: string;
   status: string;
+  teamId: string | null;
   listId: string | null;
   listName: string | null;
   dateUpdated: number;
+  timeSpentMs: number;
 };
 
 type ClickUpStatus = {
@@ -58,6 +60,20 @@ type SetStatusPayload = {
 type SetStatusResult = {
   taskId: string;
   status: string;
+};
+
+type RecordTimeSpentPayload = {
+  taskId: string;
+  teamId: string | null;
+  elapsedMs: number;
+  startedAt: number;
+};
+
+type RecordTimeSpentResult = {
+  recorded: boolean;
+  taskId?: string;
+  elapsedMs?: number;
+  reason?: string;
 };
 
 type SetActiveTaskPayload = {
@@ -113,6 +129,9 @@ interface Window {
   clickup: {
     getMyTasks: () => Promise<ClickUpSnapshot>;
     setStatus: (payload: SetStatusPayload) => Promise<SetStatusResult>;
+    recordTimeSpent: (
+      payload: RecordTimeSpentPayload,
+    ) => Promise<RecordTimeSpentResult>;
     setActiveTask: (payload: SetActiveTaskPayload) => Promise<ActiveTaskState>;
     openTask: (payload: OpenTaskPayload) => Promise<OpenTaskResult>;
     pause: () => Promise<ActiveTaskState>;

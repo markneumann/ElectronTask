@@ -34,9 +34,11 @@ type ClickUpTask = {
   id: string;
   name: string;
   status: string;
+  teamId: string | null;
   listId: string | null;
   listName: string | null;
   dateUpdated: number;
+  timeSpentMs: number;
 };
 
 type ClickUpStatus = {
@@ -350,7 +352,7 @@ const getTeams = async () => {
     .filter((team): team is ClickUpTeam => Boolean(team));
 };
 
-const mapTask = (task: unknown): ClickUpTask | null => {
+const mapTask = (task: unknown, fallbackTeamId: string | null = null): ClickUpTask | null => {
   const record = asRecord(task);
   const id = stringValue(record.id);
   const name = stringValue(record.name);
@@ -362,25 +364,32 @@ const mapTask = (task: unknown): ClickUpTask | null => {
   const status = asRecord(record.status);
   const list = asRecord(record.list);
   const dateUpdated = Number(stringValue(record.date_updated) ?? 0);
+  const timeSpentMs = Number(stringValue(record.time_spent) ?? record.time_spent ?? 0);
 
   return {
     id,
     name,
     status: stringValue(status.status) ?? 'Unknown',
+    teamId: stringValue(record.team_id) ?? fallbackTeamId,
     listId: stringValue(list.id),
     listName: stringValue(list.name),
     dateUpdated: Number.isFinite(dateUpdated) ? dateUpdated : 0,
+    timeSpentMs: Number.isFinite(timeSpentMs) ? timeSpentMs : 0,
   };
 };
 
-const getPagedTasks = async (pathName: string, params: URLSearchParams) => {
+const getPagedTasks = async (
+  pathName: string,
+  params: URLSearchParams,
+  fallbackTeamId: string | null = null,
+) => {
   const tasks: ClickUpTask[] = [];
 
   for (let page = 0; page < MAX_TASK_PAGES; page += 1) {
     params.set('page', String(page));
     const body = asRecord(await clickUpFetch(`${pathName}?${params.toString()}`));
     const pageTasks = asArray(body.tasks)
-      .map(mapTask)
+      .map((task) => mapTask(task, fallbackTeamId))
       .filter((task): task is ClickUpTask => Boolean(task));
 
     tasks.push(...pageTasks);
@@ -393,7 +402,11 @@ const getPagedTasks = async (pathName: string, params: URLSearchParams) => {
   return tasks;
 };
 
-const getTasksFromList = async (listId: string, userId: string) => {
+const getTasksFromList = async (
+  listId: string,
+  userId: string,
+  fallbackTeamId: string | null,
+) => {
   const params = new URLSearchParams({
     include_closed: 'false',
     order_by: 'updated',
@@ -401,7 +414,7 @@ const getTasksFromList = async (listId: string, userId: string) => {
   });
   params.append('assignees[]', userId);
 
-  return getPagedTasks(`/list/${encodeURIComponent(listId)}/task`, params);
+  return getPagedTasks(`/list/${encodeURIComponent(listId)}/task`, params, fallbackTeamId);
 };
 
 const getTasksFromTeams = async (teams: ClickUpTeam[], userId: string) => {
@@ -414,7 +427,7 @@ const getTasksFromTeams = async (teams: ClickUpTeam[], userId: string) => {
       });
       params.append('assignees[]', userId);
 
-      return getPagedTasks(`/team/${encodeURIComponent(team.id)}/task`, params);
+      return getPagedTasks(`/team/${encodeURIComponent(team.id)}/task`, params, team.id);
     }),
   );
 
@@ -451,8 +464,9 @@ const getMyTasks = async (): Promise<ClickUpSnapshot> => {
   const teams = await getTeams();
   const defaultListId = store.get('defaultListId');
   const source = defaultListId ? 'list' : 'team';
+  const fallbackTeamId = teams[0]?.id ?? null;
   const tasks = defaultListId
-    ? await getTasksFromList(defaultListId, user.id)
+    ? await getTasksFromList(defaultListId, user.id, fallbackTeamId)
     : await getTasksFromTeams(teams, user.id);
   const sortedTasks = tasks.sort((left, right) => right.dateUpdated - left.dateUpdated);
   const isPaused = store.get('isPaused') === true;
@@ -699,6 +713,47 @@ const setTaskStatus = async (payload: unknown) => {
   };
 };
 
+const recordTaskTimeSpent = async (payload: unknown) => {
+  const data = asRecord(payload);
+  const taskId = trimString(data.taskId);
+  const teamId = trimString(data.teamId);
+  const elapsedMs = Number(data.elapsedMs);
+  const startedAt = Number(data.startedAt);
+
+  if (!taskId || !teamId) {
+    return {
+      recorded: false,
+      reason: 'missing-task-context',
+    };
+  }
+
+  if (!Number.isFinite(elapsedMs) || elapsedMs < 60_000) {
+    return {
+      recorded: false,
+      reason: 'elapsed-too-short',
+    };
+  }
+
+  const duration = Math.floor(elapsedMs);
+  const start = Number.isFinite(startedAt) ? Math.floor(startedAt) : Date.now() - duration;
+
+  await clickUpFetch(`/team/${encodeURIComponent(teamId)}/time_entries`, {
+    method: 'POST',
+    body: JSON.stringify({
+      start,
+      duration,
+      tid: taskId,
+      billable: false,
+    }),
+  });
+
+  return {
+    recorded: true,
+    taskId,
+    elapsedMs: duration,
+  };
+};
+
 const createTrayIcon = () => {
   return nativeImage.createFromDataURL(
     `data:image/svg+xml;charset=utf-8,${encodeURIComponent(trayIconSvg)}`,
@@ -863,6 +918,9 @@ ipcMain.handle('auth:saveToken', (_event, payload) => saveToken(payload));
 ipcMain.handle('auth:clearToken', clearToken);
 ipcMain.handle('clickup:getMyTasks', getMyTasks);
 ipcMain.handle('clickup:setStatus', (_event, payload) => setTaskStatus(payload));
+ipcMain.handle('clickup:recordTimeSpent', (_event, payload) =>
+  recordTaskTimeSpent(payload),
+);
 ipcMain.handle('clickup:setActiveTask', (_event, payload) => setActiveTask(payload));
 ipcMain.handle('clickup:openTask', (_event, payload) => openTask(payload));
 ipcMain.handle('clickup:pause', pauseActiveTask);

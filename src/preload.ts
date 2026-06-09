@@ -16,6 +16,11 @@ contextBridge.exposeInMainWorld('clickup', {
     ipcRenderer.invoke('clickup:getMyTasks') as Promise<ClickUpSnapshot>,
   setStatus: (payload: SetStatusPayload) =>
     ipcRenderer.invoke('clickup:setStatus', payload) as Promise<SetStatusResult>,
+  recordTimeSpent: (payload: RecordTimeSpentPayload) =>
+    ipcRenderer.invoke(
+      'clickup:recordTimeSpent',
+      payload,
+    ) as Promise<RecordTimeSpentResult>,
   setActiveTask: (payload: SetActiveTaskPayload) =>
     ipcRenderer.invoke('clickup:setActiveTask', payload) as Promise<ActiveTaskState>,
   openTask: (payload: OpenTaskPayload) =>
