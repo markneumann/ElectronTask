@@ -45,11 +45,16 @@ const renderShell = (content: string) => {
 };
 
 const formatTimer = () => {
-  const elapsedHours = Math.floor((Date.now() - timerStartedAt) / 3_600_000);
-  const days = Math.floor(elapsedHours / 24);
-  const hours = elapsedHours % 24;
+  const elapsedMinutes = Math.floor((Date.now() - timerStartedAt) / 60_000);
+  const days = Math.floor(elapsedMinutes / 1_440);
+  const hours = Math.floor((elapsedMinutes % 1_440) / 60);
+  const minutes = elapsedMinutes % 60;
 
-  return `${String(days).padStart(2, '0')}:${String(hours).padStart(2, '0')}`;
+  return [
+    String(days).padStart(2, '0'),
+    String(hours).padStart(2, '0'),
+    String(minutes).padStart(2, '0'),
+  ].join(':');
 };
 
 const updateTimerElements = () => {
