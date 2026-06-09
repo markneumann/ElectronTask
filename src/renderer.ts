@@ -183,16 +183,14 @@ const renderTasks = (
 
   renderShell(`
     <section class="task-summary" aria-label="Current ClickUp task">
-      <div class="status-row">
-        <span class="status-dot ${snapshot.isPaused ? 'warn' : ''}" aria-hidden="true"></span>
-        <span class="status-label">${escapeHtml(
-          snapshot.isEmpty
-            ? 'Empty'
-            : snapshot.isPaused
-              ? 'Paused'
-              : activeTask?.status ?? 'No open task',
-        )}</span>
-      </div>
+      <span class="status-dot ${snapshot.isPaused ? 'warn' : ''}" aria-hidden="true"></span>
+      <span class="status-label">${escapeHtml(
+        snapshot.isEmpty
+          ? 'Empty'
+          : snapshot.isPaused
+            ? 'Paused'
+            : activeTask?.status ?? 'No open task',
+      )}</span>
       <h1>${escapeHtml(
         snapshot.isEmpty
           ? 'No assigned tasks'
@@ -200,12 +198,7 @@ const renderTasks = (
             ? 'No active task'
             : activeTask?.name ?? 'No assigned task',
       )}</h1>
-      ${
-        activeTask && !snapshot.isPaused
-          ? `<button id="open-task-title" class="task-open-link" type="button">Open in ClickUp</button>`
-          : ''
-      }
-      <p class="task-name">
+      <span class="task-name">
         ${escapeHtml(
           snapshot.isEmpty
             ? 'Refresh when ClickUp has assigned work.'
@@ -213,27 +206,29 @@ const renderTasks = (
               ? 'Paused until you choose a task'
               : activeTask?.listName ?? sourceLabel,
         )}
-      </p>
+      </span>
     </section>
-    ${
-      snapshot.tasks.length > 0
-        ? `<label class="task-picker">
-            <span>Task</span>
-            <select id="task-select" aria-label="Switch active task">
-              <option value="" ${snapshot.isPaused ? 'selected' : ''}>Paused</option>
-              ${taskOptions}
-            </select>
-          </label>`
-        : ''
-    }
-    ${
-      canChangeStatus
-        ? `<label class="status-control">
-            <span>Status</span>
-            <select id="status-select" aria-label="Change task status">${options}</select>
-          </label>`
-        : `<p class="notice">No list statuses available for this task.</p>`
-    }
+    <section class="picker-row">
+      ${
+        snapshot.tasks.length > 0
+          ? `<label class="task-picker">
+              <span>Task</span>
+              <select id="task-select" aria-label="Switch active task">
+                <option value="" ${snapshot.isPaused ? 'selected' : ''}>Paused</option>
+                ${taskOptions}
+              </select>
+            </label>`
+          : ''
+      }
+      ${
+        canChangeStatus
+          ? `<label class="status-control">
+              <span>Status</span>
+              <select id="status-select" aria-label="Change task status">${options}</select>
+            </label>`
+          : `<p class="notice">No list statuses available for this task.</p>`
+      }
+    </section>
     <section class="footer-row">
       <select id="hotkey-select" class="hotkey-select" aria-label="Global hotkey" title="Global hotkey">
         ${hotkeyOptions}
@@ -341,7 +336,6 @@ const renderTasks = (
     }
   };
 
-  document.getElementById('open-task-title')?.addEventListener('click', openActiveTask);
   document.getElementById('open-task')?.addEventListener('click', openActiveTask);
 
   document.getElementById('hotkey-select')?.addEventListener('change', async (event) => {

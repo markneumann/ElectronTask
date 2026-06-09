@@ -66,9 +66,9 @@ type ClickUpSnapshot = {
 };
 
 const CLICKUP_BASE_URL = 'https://api.clickup.com/api/v2';
-const WINDOW_WIDTH = 320;
-const WINDOW_HEIGHT = 170;
-const DEV_WINDOW_HEIGHT = 230;
+const WINDOW_WIDTH = 1400;
+const WINDOW_HEIGHT = 30;
+const DEV_WINDOW_HEIGHT = WINDOW_HEIGHT;
 const TASKS_PAGE_LIMIT = 100;
 const MAX_TASK_PAGES = 20;
 const MAX_FETCH_ATTEMPTS = 3;
@@ -677,8 +677,8 @@ const getWidgetPosition = () => {
     const display = screen.getPrimaryDisplay().workArea;
 
     return {
-      x: display.x + display.width - WINDOW_WIDTH - 16,
-      y: display.y + 16,
+      x: display.x + Math.round((display.width - WINDOW_WIDTH) / 2),
+      y: display.y + 8,
     };
   }
 
@@ -696,17 +696,9 @@ const getWidgetPosition = () => {
     display.x + display.width - WINDOW_WIDTH - 8,
   );
 
-  const opensDown = trayBounds.y < display.y + display.height / 2;
-  const y = opensDown
-    ? trayBounds.y + trayBounds.height + 8
-    : trayBounds.y - WINDOW_HEIGHT - 8;
-
   return {
     x,
-    y: Math.min(
-      Math.max(Math.round(y), display.y + 8),
-      display.y + display.height - WINDOW_HEIGHT - 8,
-    ),
+    y: display.y + 8,
   };
 };
 
@@ -748,8 +740,8 @@ const createWidgetWindow = () => {
     width: WINDOW_WIDTH,
     height: isDev ? DEV_WINDOW_HEIGHT : WINDOW_HEIGHT,
     show: false,
-    frame: isDev,
-    transparent: !isDev,
+    frame: false,
+    transparent: true,
     alwaysOnTop: true,
     skipTaskbar: !isDev,
     resizable: false,
