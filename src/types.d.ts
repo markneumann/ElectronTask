@@ -24,7 +24,7 @@ type ClickUpTask = {
   listId: string | null;
   listName: string | null;
   dateUpdated: number;
-  timeSpentMs: number;
+  timeTrackedMs: number;
 };
 
 type ClickUpStatus = {
@@ -62,14 +62,14 @@ type SetStatusResult = {
   status: string;
 };
 
-type RecordTimeSpentPayload = {
+type RecordTimeTrackedPayload = {
   taskId: string;
   teamId: string | null;
   elapsedMs: number;
   startedAt: number;
 };
 
-type RecordTimeSpentResult = {
+type RecordTimeTrackedResult = {
   recorded: boolean;
   taskId?: string;
   elapsedMs?: number;
@@ -129,9 +129,9 @@ interface Window {
   clickup: {
     getMyTasks: () => Promise<ClickUpSnapshot>;
     setStatus: (payload: SetStatusPayload) => Promise<SetStatusResult>;
-    recordTimeSpent: (
-      payload: RecordTimeSpentPayload,
-    ) => Promise<RecordTimeSpentResult>;
+    recordTimeTracked: (
+      payload: RecordTimeTrackedPayload,
+    ) => Promise<RecordTimeTrackedResult>;
     setActiveTask: (payload: SetActiveTaskPayload) => Promise<ActiveTaskState>;
     openTask: (payload: OpenTaskPayload) => Promise<OpenTaskResult>;
     pause: () => Promise<ActiveTaskState>;

@@ -38,7 +38,7 @@ type ClickUpTask = {
   listId: string | null;
   listName: string | null;
   dateUpdated: number;
-  timeSpentMs: number;
+  timeTrackedMs: number;
 };
 
 type ClickUpStatus = {
@@ -364,7 +364,7 @@ const mapTask = (task: unknown, fallbackTeamId: string | null = null): ClickUpTa
   const status = asRecord(record.status);
   const list = asRecord(record.list);
   const dateUpdated = Number(stringValue(record.date_updated) ?? 0);
-  const timeSpentMs = Number(stringValue(record.time_spent) ?? record.time_spent ?? 0);
+  const timeTrackedMs = Number(stringValue(record.time_spent) ?? record.time_spent ?? 0);
 
   return {
     id,
@@ -374,7 +374,7 @@ const mapTask = (task: unknown, fallbackTeamId: string | null = null): ClickUpTa
     listId: stringValue(list.id),
     listName: stringValue(list.name),
     dateUpdated: Number.isFinite(dateUpdated) ? dateUpdated : 0,
-    timeSpentMs: Number.isFinite(timeSpentMs) ? timeSpentMs : 0,
+    timeTrackedMs: Number.isFinite(timeTrackedMs) ? timeTrackedMs : 0,
   };
 };
 
@@ -713,7 +713,7 @@ const setTaskStatus = async (payload: unknown) => {
   };
 };
 
-const recordTaskTimeSpent = async (payload: unknown) => {
+const recordTaskTimeTracked = async (payload: unknown) => {
   const data = asRecord(payload);
   const taskId = trimString(data.taskId);
   const teamId = trimString(data.teamId);
@@ -918,8 +918,8 @@ ipcMain.handle('auth:saveToken', (_event, payload) => saveToken(payload));
 ipcMain.handle('auth:clearToken', clearToken);
 ipcMain.handle('clickup:getMyTasks', getMyTasks);
 ipcMain.handle('clickup:setStatus', (_event, payload) => setTaskStatus(payload));
-ipcMain.handle('clickup:recordTimeSpent', (_event, payload) =>
-  recordTaskTimeSpent(payload),
+ipcMain.handle('clickup:recordTimeTracked', (_event, payload) =>
+  recordTaskTimeTracked(payload),
 );
 ipcMain.handle('clickup:setActiveTask', (_event, payload) => setActiveTask(payload));
 ipcMain.handle('clickup:openTask', (_event, payload) => openTask(payload));

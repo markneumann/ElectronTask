@@ -82,7 +82,7 @@ const syncTimerToSnapshot = (snapshot: ClickUpSnapshot) => {
   }
 
   timedStateId = nextTimedStateId;
-  timerBaseMs = activeTask?.timeSpentMs ?? 0;
+  timerBaseMs = activeTask?.timeTrackedMs ?? 0;
   timerStartedAt = Date.now();
 };
 
@@ -94,7 +94,7 @@ const recordCurrentTaskTime = async (task: ClickUpTask | null) => {
   }
 
   const elapsedMs = Date.now() - timerStartedAt;
-  await window.clickup.recordTimeSpent({
+  await window.clickup.recordTimeTracked({
     taskId: task.id,
     teamId: task.teamId,
     elapsedMs,
