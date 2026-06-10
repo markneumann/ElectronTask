@@ -42,6 +42,10 @@ contextBridge.exposeInMainWorld('settings', {
       'settings:setLaunchAtLogin',
       payload,
     ) as Promise<LaunchAtLoginStatus>,
+  getAppearance: () =>
+    ipcRenderer.invoke('settings:getAppearance') as Promise<AppearanceStatus>,
+  setAppearance: (payload: SetAppearancePayload) =>
+    ipcRenderer.invoke('settings:setAppearance', payload) as Promise<AppearanceStatus>,
   setDefaultListId: (payload: SetDefaultListIdPayload) =>
     ipcRenderer.invoke('settings:setDefaultListId', payload) as Promise<AuthStatus>,
   showOptionsMenu: () =>
@@ -49,6 +53,11 @@ contextBridge.exposeInMainWorld('settings', {
   onConfigureList: (callback: () => void) => {
     ipcRenderer.on('settings:configureList', () => {
       callback();
+    });
+  },
+  onAppearanceChanged: (callback: (theme: AppearanceTheme) => void) => {
+    ipcRenderer.on('settings:appearanceChanged', (_event, theme: AppearanceTheme) => {
+      callback(theme);
     });
   },
 });

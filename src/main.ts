@@ -28,6 +28,7 @@ type AppStore = {
   isPaused?: boolean;
   hotkey?: string;
   launchAtLogin?: boolean;
+  appearance?: AppearanceTheme;
 };
 
 type ClickUpTask = {
@@ -50,6 +51,8 @@ type ClickUpTeam = {
   id: string;
   name: string;
 };
+
+type AppearanceTheme = 'black' | 'white' | 'bright';
 
 type ClickUpSnapshot = {
   user: {
@@ -81,6 +84,7 @@ const HOTKEY_OPTIONS = [
   'CommandOrControl+Alt+C',
   'Alt+Shift+C',
 ] as const;
+const APPEARANCE_THEMES = ['black', 'white', 'bright'] as const;
 const isDev = Boolean(MAIN_WINDOW_VITE_DEV_SERVER_URL);
 
 const store = new Store<AppStore>({
@@ -663,8 +667,33 @@ const setLaunchAtLogin = (payload: unknown) => {
   return getLaunchAtLoginStatus();
 };
 
+const getAppearanceTheme = (): AppearanceTheme => {
+  const appearance = store.get('appearance');
+
+  return APPEARANCE_THEMES.includes(appearance as AppearanceTheme)
+    ? (appearance as AppearanceTheme)
+    : 'black';
+};
+
+const setAppearanceTheme = (payload: unknown) => {
+  const data = asRecord(payload);
+  const theme = trimString(data.theme);
+
+  if (!theme || !APPEARANCE_THEMES.includes(theme as AppearanceTheme)) {
+    throw new Error('Choose one of the supported appearance themes.');
+  }
+
+  store.set('appearance', theme as AppearanceTheme);
+  widgetWindow?.webContents.send('settings:appearanceChanged', theme);
+
+  return {
+    theme: theme as AppearanceTheme,
+  };
+};
+
 const showOptionsMenu = (window: BrowserWindow | null) => {
   const activeHotkey = getConfiguredHotkey();
+  const activeAppearance = getAppearanceTheme();
   const launchAtLogin = getLaunchAtLoginStatus();
   const menu = Menu.buildFromTemplate([
     {
@@ -683,6 +712,21 @@ const showOptionsMenu = (window: BrowserWindow | null) => {
       click: () => {
         window?.webContents.send('settings:configureList');
       },
+    },
+    {
+      label: 'Appearance',
+      submenu: [
+        { label: 'Black default', theme: 'black' },
+        { label: 'White background', theme: 'white' },
+        { label: 'Bright yellow', theme: 'bright' },
+      ].map(({ label, theme }) => ({
+        label,
+        type: 'radio',
+        checked: theme === activeAppearance,
+        click: () => {
+          setAppearanceTheme({ theme });
+        },
+      })),
     },
     { type: 'separator' },
     {
@@ -947,6 +991,12 @@ ipcMain.handle('hotkey:set', (_event, payload) => setHotkey(payload));
 ipcMain.handle('settings:getLaunchAtLogin', getLaunchAtLoginStatus);
 ipcMain.handle('settings:setLaunchAtLogin', (_event, payload) =>
   setLaunchAtLogin(payload),
+);
+ipcMain.handle('settings:getAppearance', () => ({
+  theme: getAppearanceTheme(),
+}));
+ipcMain.handle('settings:setAppearance', (_event, payload) =>
+  setAppearanceTheme(payload),
 );
 ipcMain.handle('settings:setDefaultListId', (_event, payload) =>
   setDefaultListId(payload),

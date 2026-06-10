@@ -684,6 +684,16 @@ const render = (state: AppState) => {
   }
 };
 
+const applyAppearance = (theme: AppearanceTheme) => {
+  document.body.classList.remove('theme-black', 'theme-white', 'theme-bright');
+  document.body.classList.add(`theme-${theme}`);
+};
+
+const loadAppearance = async () => {
+  const appearance = await window.settings.getAppearance();
+  applyAppearance(appearance.theme);
+};
+
 const loadTasks = async (status: AuthStatus) => {
   render({ view: 'loading', status, message: 'Loading tasks...' });
 
@@ -732,8 +742,13 @@ const loadApp = async () => {
 
 window.widget
   .ping()
-  .then(loadApp)
+  .then(async () => {
+    await loadAppearance();
+    await loadApp();
+  })
   .catch(() => renderLoading('Main process unavailable.'));
+
+window.settings.onAppearanceChanged(applyAppearance);
 
 window.settings.onConfigureList(async () => {
   try {

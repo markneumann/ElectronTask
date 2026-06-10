@@ -113,6 +113,16 @@ type SetLaunchAtLoginPayload = {
   enabled: boolean;
 };
 
+type AppearanceTheme = 'black' | 'white' | 'bright';
+
+type AppearanceStatus = {
+  theme: AppearanceTheme;
+};
+
+type SetAppearancePayload = {
+  theme: AppearanceTheme;
+};
+
 type SetDefaultListIdPayload = {
   defaultListId: string | null;
 };
@@ -145,8 +155,11 @@ interface Window {
     setLaunchAtLogin: (
       payload: SetLaunchAtLoginPayload,
     ) => Promise<LaunchAtLoginStatus>;
+    getAppearance: () => Promise<AppearanceStatus>;
+    setAppearance: (payload: SetAppearancePayload) => Promise<AppearanceStatus>;
     setDefaultListId: (payload: SetDefaultListIdPayload) => Promise<AuthStatus>;
     showOptionsMenu: () => Promise<void>;
     onConfigureList: (callback: () => void) => void;
+    onAppearanceChanged: (callback: (theme: AppearanceTheme) => void) => void;
   };
 }
