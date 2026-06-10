@@ -28,6 +28,7 @@ type ToastState = {
 const root = document.getElementById('app');
 let timerStartedAt = Date.now();
 let timerBaseMs = 0;
+let timerRemoteBaseMs = 0;
 let timedStateId: string | null = null;
 
 const escapeHtml = (value: string | null) =>
@@ -68,6 +69,7 @@ const updateTimerElements = () => {
 const resetTimer = () => {
   timerStartedAt = Date.now();
   timerBaseMs = 0;
+  timerRemoteBaseMs = 0;
   updateTimerElements();
 };
 
@@ -76,13 +78,20 @@ window.setInterval(updateTimerElements, 1_000);
 const syncTimerToSnapshot = (snapshot: ClickUpSnapshot) => {
   const activeTask = snapshot.isPaused ? null : snapshot.activeTask;
   const nextTimedStateId = activeTask?.id ?? null;
+  const nextRemoteBaseMs = activeTask?.timeTrackedMs ?? 0;
 
   if (nextTimedStateId === timedStateId) {
+    if (nextRemoteBaseMs !== timerRemoteBaseMs) {
+      timerRemoteBaseMs = nextRemoteBaseMs;
+      timerBaseMs = nextRemoteBaseMs;
+    }
+
     return;
   }
 
   timedStateId = nextTimedStateId;
-  timerBaseMs = activeTask?.timeTrackedMs ?? 0;
+  timerRemoteBaseMs = nextRemoteBaseMs;
+  timerBaseMs = nextRemoteBaseMs;
   timerStartedAt = Date.now();
 };
 

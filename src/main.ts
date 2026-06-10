@@ -434,6 +434,15 @@ const getTasksFromTeams = async (teams: ClickUpTeam[], userId: string) => {
   return taskGroups.flat();
 };
 
+const getTaskById = async (
+  taskId: string,
+  fallbackTeamId: string | null,
+): Promise<ClickUpTask | null> => {
+  const body = await clickUpFetch(`/task/${encodeURIComponent(taskId)}`);
+
+  return mapTask(body, fallbackTeamId);
+};
+
 const getListStatuses = async (listId: string) => {
   const body = asRecord(await clickUpFetch(`/list/${encodeURIComponent(listId)}`));
   const statuses = asArray(body.statuses)
@@ -475,23 +484,32 @@ const getMyTasks = async (): Promise<ClickUpSnapshot> => {
     ? sortedTasks.find((task) => task.id === storedActiveTaskId) ?? null
     : null;
   const activeTask = isPaused ? null : selectedTask ?? sortedTasks[0] ?? null;
-  const activeTaskStatuses = activeTask?.listId
-    ? await getListStatuses(activeTask.listId)
+  const activeTaskDetail = activeTask
+    ? await getTaskById(activeTask.id, activeTask.teamId ?? fallbackTeamId)
+    : null;
+  const currentActiveTask = activeTaskDetail ?? activeTask;
+  const currentTasks = activeTaskDetail
+    ? sortedTasks.map((task) =>
+        task.id === activeTaskDetail.id ? activeTaskDetail : task,
+      )
+    : sortedTasks;
+  const activeTaskStatuses = currentActiveTask?.listId
+    ? await getListStatuses(currentActiveTask.listId)
     : [];
 
-  if (!isPaused && activeTask && activeTask.id !== storedActiveTaskId) {
-    store.set('activeTaskId', activeTask.id);
+  if (!isPaused && currentActiveTask && currentActiveTask.id !== storedActiveTaskId) {
+    store.set('activeTaskId', currentActiveTask.id);
   }
 
   return {
     user,
     teams,
-    tasks: sortedTasks,
-    activeTask,
+    tasks: currentTasks,
+    activeTask: currentActiveTask,
     activeTaskStatuses,
-    activeTaskId: activeTask?.id ?? null,
+    activeTaskId: currentActiveTask?.id ?? null,
     isPaused,
-    isEmpty: sortedTasks.length === 0,
+    isEmpty: currentTasks.length === 0,
     source,
     fetchedAt: new Date().toISOString(),
   };
