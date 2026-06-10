@@ -31,6 +31,7 @@ let timerBaseMs = 0;
 let timerRemoteBaseMs = 0;
 let timedStateId: string | null = null;
 let isEditingTimer = false;
+let currentTimerTask: ClickUpTask | null = null;
 
 const escapeHtml = (value: string | null) =>
   (value ?? '')
@@ -111,6 +112,7 @@ window.setInterval(updateTimerElements, 1_000);
 
 const syncTimerToSnapshot = (snapshot: ClickUpSnapshot) => {
   const activeTask = snapshot.isPaused ? null : snapshot.activeTask;
+  currentTimerTask = activeTask;
   const nextTimedStateId = activeTask?.id ?? null;
   const nextRemoteBaseMs = activeTask?.timeTrackedMs ?? 0;
 
@@ -133,6 +135,7 @@ const recordCurrentTaskTime = async (task: ClickUpTask | null) => {
   if (!task) {
     resetTimer();
     timedStateId = null;
+    currentTimerTask = null;
     return;
   }
 
@@ -752,6 +755,7 @@ window.settings.onAppearanceChanged(applyAppearance);
 
 window.settings.onConfigureList(async () => {
   try {
+    await recordCurrentTaskTime(currentTimerTask);
     const status = await window.auth.getStatus();
     renderListConfig(status);
   } catch (error) {
