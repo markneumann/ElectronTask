@@ -30,6 +30,7 @@ let timerStartedAt = Date.now();
 let timerBaseMs = 0;
 let timerRemoteBaseMs = 0;
 let timedStateId: string | null = null;
+let isEditingTimer = false;
 
 const escapeHtml = (value: string | null) =>
   (value ?? '')
@@ -47,8 +48,10 @@ const renderShell = (content: string) => {
   root.innerHTML = `<main class="widget-shell">${content}</main>`;
 };
 
-const formatTimer = () => {
-  const elapsedMinutes = Math.floor((timerBaseMs + Date.now() - timerStartedAt) / 60_000);
+const currentTimerMs = () => timerBaseMs + Date.now() - timerStartedAt;
+
+const formatTimerMs = (milliseconds: number) => {
+  const elapsedMinutes = Math.floor(Math.max(0, milliseconds) / 60_000);
   const days = Math.floor(elapsedMinutes / 1_440);
   const hours = Math.floor((elapsedMinutes % 1_440) / 60);
   const minutes = elapsedMinutes % 60;
@@ -60,10 +63,41 @@ const formatTimer = () => {
   ].join(':');
 };
 
+const formatTimer = () => formatTimerMs(currentTimerMs());
+
+const parseTimerInput = (value: string) => {
+  const match = value.trim().match(/^(\d+):([0-1]?\d|2[0-3]):([0-5]?\d)$/);
+
+  if (!match) {
+    return null;
+  }
+
+  const [, daysValue, hoursValue, minutesValue] = match;
+  const days = Number(daysValue);
+  const hours = Number(hoursValue);
+  const minutes = Number(minutesValue);
+
+  if (![days, hours, minutes].every(Number.isFinite)) {
+    return null;
+  }
+
+  return ((days * 24 + hours) * 60 + minutes) * 60_000;
+};
+
 const updateTimerElements = () => {
-  document.querySelectorAll<HTMLElement>('[data-timer-readout]').forEach((element) => {
-    element.textContent = formatTimer();
+  if (isEditingTimer) {
+    return;
+  }
+
+  document.querySelectorAll<HTMLInputElement>('[data-timer-readout]').forEach((element) => {
+    element.value = formatTimer();
   });
+};
+
+const setTimerValue = (milliseconds: number) => {
+  timerBaseMs = Math.max(0, milliseconds);
+  timerStartedAt = Date.now();
+  updateTimerElements();
 };
 
 const resetTimer = () => {
@@ -102,14 +136,15 @@ const recordCurrentTaskTime = async (task: ClickUpTask | null) => {
     return;
   }
 
-  const elapsedMs = Date.now() - timerStartedAt;
+  const elapsedMs = Math.max(0, currentTimerMs() - timerRemoteBaseMs);
   await window.clickup.recordTimeTracked({
     taskId: task.id,
     teamId: task.teamId,
     elapsedMs,
-    startedAt: timerStartedAt,
+    startedAt: Date.now() - elapsedMs,
   });
-  timerBaseMs += elapsedMs;
+  timerRemoteBaseMs += elapsedMs;
+  timerBaseMs = timerRemoteBaseMs;
   timerStartedAt = Date.now();
   updateTimerElements();
 };
@@ -358,7 +393,16 @@ const renderTasks = (
       }
     </section>
     <section class="footer-row">
-      <span class="timer-readout" data-timer-readout title="Time on current state">${formatTimer()}</span>
+      <input
+        id="timer-readout"
+        class="timer-readout"
+        data-timer-readout
+        type="text"
+        inputmode="numeric"
+        value="${formatTimer()}"
+        aria-label="Edit time tracked"
+        title="Edit time tracked as DD:HH:MM"
+      />
       <div class="footer-actions">
         <button id="refresh" class="icon-button refresh-button" type="button" title="Refresh" aria-label="Refresh"></button>
         <button id="options" class="icon-button" type="button" title="Options" aria-label="Options">...</button>
@@ -398,6 +442,48 @@ const renderTasks = (
         kind: 'error',
         message: error instanceof Error ? error.message : 'Could not switch task.',
       });
+    }
+  });
+
+  const timerInput = document.getElementById('timer-readout') as HTMLInputElement | null;
+  const commitTimerEdit = () => {
+    if (!timerInput) {
+      return true;
+    }
+
+    const nextTimerMs = parseTimerInput(timerInput.value);
+
+    if (nextTimerMs === null) {
+      timerInput.value = formatTimer();
+      return false;
+    }
+
+    setTimerValue(nextTimerMs);
+    return true;
+  };
+
+  timerInput?.addEventListener('focus', () => {
+    isEditingTimer = true;
+    timerInput.select();
+  });
+  timerInput?.addEventListener('blur', () => {
+    commitTimerEdit();
+    isEditingTimer = false;
+    updateTimerElements();
+  });
+  timerInput?.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      if (commitTimerEdit()) {
+        timerInput.blur();
+      }
+      return;
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      timerInput.value = formatTimer();
+      timerInput.blur();
     }
   });
 
