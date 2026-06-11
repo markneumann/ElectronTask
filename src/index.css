@@ -288,7 +288,7 @@ select {
   background: var(--control-bg);
   border: 1px solid var(--control-border);
   border-radius: 5px;
-  font-size: 8px;
+  font-size: 9px;
   line-height: 1;
   outline: none;
 }
