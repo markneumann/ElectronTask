@@ -330,7 +330,7 @@ const renderTasks = (
         `<option value="${escapeHtml(task.id)}" ${
           task.id === snapshot.activeTaskId ? 'selected' : ''
         }>${escapeHtml(
-          `${task.status} - ${task.name} - ${daysSinceUpdateLabel(task.dateUpdated)}`,
+          `${task.name} - ${daysSinceUpdateLabel(task.dateUpdated)}`,
         )}</option>`,
     )
     .join('');
@@ -350,7 +350,9 @@ const renderTasks = (
           ? 'Empty'
           : snapshot.isPaused
             ? 'Paused'
-            : activeTask?.status ?? 'No open task',
+            : activeTask
+              ? 'Active'
+              : 'No open task',
       )}</span>
       ${
         activeTask && !snapshot.isPaused
