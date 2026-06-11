@@ -946,7 +946,7 @@ const showWidget = () => {
     return;
   }
 
-  widgetWindow.setBounds(getWidgetBounds());
+  widgetWindow.setBounds(getWidgetBounds(true));
 
   if (isDev) {
     widgetWindow.show();
