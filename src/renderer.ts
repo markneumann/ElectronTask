@@ -324,6 +324,25 @@ const renderTasks = (
   const canChangeStatus = Boolean(
     activeTask?.listId && snapshot.activeTaskStatuses.length > 0,
   );
+  const stateValue = snapshot.isEmpty
+    ? 'empty'
+    : snapshot.isPaused
+      ? 'paused'
+      : activeTask
+        ? 'working'
+        : 'no-task';
+  const stateOptions = [
+    `<option value="working" ${stateValue === 'working' ? 'selected' : ''} ${
+      snapshot.isEmpty ? 'disabled' : ''
+    }>Working on</option>`,
+    `<option value="paused" ${stateValue === 'paused' ? 'selected' : ''} ${
+      snapshot.isEmpty ? 'disabled' : ''
+    }>Paused</option>`,
+    stateValue === 'empty' ? '<option value="empty" selected disabled>Empty</option>' : '',
+    stateValue === 'no-task'
+      ? '<option value="no-task" selected disabled>No open task</option>'
+      : '',
+  ].join('');
   const taskOptions = snapshot.tasks
     .map(
       (task) =>
@@ -345,15 +364,7 @@ const renderTasks = (
   renderShell(`
     <section class="task-summary" aria-label="Current ClickUp task">
       <span class="status-dot ${snapshot.isPaused ? 'warn' : ''}" aria-hidden="true"></span>
-      <span class="status-label">${escapeHtml(
-        snapshot.isEmpty
-          ? 'Empty'
-          : snapshot.isPaused
-            ? 'Paused'
-            : activeTask
-              ? 'Active'
-              : 'No open task',
-      )}</span>
+      <select id="state-select" class="state-select" aria-label="Current work state">${stateOptions}</select>
       ${
         activeTask && !snapshot.isPaused
           ? `<button id="open-task-title" class="task-title-button" type="button" title="Open task in ClickUp">${escapeHtml(activeTask.name)}</button>`
@@ -382,7 +393,7 @@ const renderTasks = (
           ? `<label class="task-picker">
               <span>Task</span>
               <select id="task-select" aria-label="Switch active task">
-                <option value="" ${snapshot.isPaused ? 'selected' : ''}>Paused</option>
+                ${snapshot.isPaused ? '<option value="" selected disabled>Choose task</option>' : ''}
                 ${taskOptions}
               </select>
             </label>`
@@ -412,7 +423,6 @@ const renderTasks = (
       <div class="footer-actions">
         <button id="refresh" class="icon-button refresh-button" type="button" title="Refresh" aria-label="Refresh"></button>
         <button id="options" class="icon-button" type="button" title="Options" aria-label="Options">...</button>
-        <button id="pause" class="icon-button" type="button" title="${snapshot.isPaused ? 'Resume first task' : 'Pause'}">${snapshot.isPaused ? 'Play' : 'Pause'}</button>
         <button id="disconnect" class="icon-button" type="button" title="Forget token">X</button>
       </div>
     </section>
@@ -429,24 +439,61 @@ const renderTasks = (
     const select = event.currentTarget as HTMLSelectElement;
     const taskId = select.value;
 
+    if (!taskId) {
+      return;
+    }
+
     renderTasks(status, snapshot, hotkey, launchAtLogin, {
       kind: 'info',
-      message: taskId ? 'Switching task...' : 'Pausing...',
+      message: 'Switching task...',
     });
 
     try {
       await recordCurrentTaskTime(activeTask);
-      if (taskId) {
-        await window.clickup.setActiveTask({ taskId });
-      } else {
-        await window.clickup.pause();
-      }
+      await window.clickup.setActiveTask({ taskId });
 
       await loadTasks(status);
     } catch (error) {
       renderTasks(status, snapshot, hotkey, launchAtLogin, {
         kind: 'error',
         message: error instanceof Error ? error.message : 'Could not switch task.',
+      });
+    }
+  });
+
+  document.getElementById('state-select')?.addEventListener('change', async (event) => {
+    const select = event.currentTarget as HTMLSelectElement;
+    const nextState = select.value;
+
+    if (nextState === stateValue || nextState === 'empty' || nextState === 'no-task') {
+      select.value = stateValue;
+      return;
+    }
+
+    renderTasks(status, snapshot, hotkey, launchAtLogin, {
+      kind: 'info',
+      message: nextState === 'paused' ? 'Pausing...' : 'Resuming...',
+    });
+
+    try {
+      await recordCurrentTaskTime(activeTask);
+
+      if (nextState === 'paused') {
+        await window.clickup.pause();
+      } else {
+        const taskToResume = activeTask ?? snapshot.tasks[0];
+
+        if (taskToResume) {
+          await window.clickup.setActiveTask({ taskId: taskToResume.id });
+        }
+      }
+
+      await loadTasks(status);
+    } catch (error) {
+      renderTasks(status, snapshot, hotkey, launchAtLogin, {
+        kind: 'error',
+        message:
+          error instanceof Error ? error.message : 'Could not update work state.',
       });
     }
   });
@@ -563,29 +610,6 @@ const renderTasks = (
       renderTasks(status, snapshot, hotkey, launchAtLogin, {
         kind: 'error',
         message: error instanceof Error ? error.message : 'Could not open options.',
-      });
-    }
-  });
-
-  document.getElementById('pause')?.addEventListener('click', async () => {
-    try {
-      await recordCurrentTaskTime(activeTask);
-      if (snapshot.isPaused) {
-        const firstTask = snapshot.tasks[0];
-
-        if (firstTask) {
-          await window.clickup.setActiveTask({ taskId: firstTask.id });
-        }
-      } else {
-        await window.clickup.pause();
-      }
-
-      await loadTasks(status);
-    } catch (error) {
-      renderTasks(status, snapshot, hotkey, launchAtLogin, {
-        kind: 'error',
-        message:
-          error instanceof Error ? error.message : 'Could not update pause state.',
       });
     }
   });
