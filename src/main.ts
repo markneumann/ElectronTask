@@ -712,11 +712,11 @@ const setSnapPosition = (payload: unknown) => {
 
   store.set('snapPosition', position as SnapPosition);
 
-  if (widgetWindow?.isVisible() && !isDev) {
+  if (widgetWindow?.isVisible()) {
     widgetWindow.setBounds({
       ...getWidgetPosition(),
       width: WINDOW_WIDTH,
-      height: WINDOW_HEIGHT,
+      height: isDev ? DEV_WINDOW_HEIGHT : WINDOW_HEIGHT,
     });
   }
 
@@ -938,18 +938,18 @@ const showWidget = () => {
     return;
   }
 
+  widgetWindow.setBounds({
+    ...getWidgetPosition(),
+    width: WINDOW_WIDTH,
+    height: isDev ? DEV_WINDOW_HEIGHT : WINDOW_HEIGHT,
+  });
+
   if (isDev) {
-    widgetWindow.center();
     widgetWindow.show();
     widgetWindow.focus();
     return;
   }
 
-  widgetWindow.setBounds({
-    ...getWidgetPosition(),
-    width: WINDOW_WIDTH,
-    height: WINDOW_HEIGHT,
-  });
   widgetWindow.showInactive();
 };
 
