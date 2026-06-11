@@ -282,13 +282,13 @@ h1 {
 select {
   width: 100%;
   min-width: 0;
-  height: 16px;
+  height: 18px;
   padding: 0 4px;
   color: var(--text-primary);
   background: var(--control-bg);
   border: 1px solid var(--control-border);
   border-radius: 5px;
-  font-size: 9px;
+  font-size: 10px;
   line-height: 1;
   outline: none;
 }
