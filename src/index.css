@@ -98,7 +98,7 @@ textarea {
   border-radius: 6px;
   box-shadow: var(--shell-shadow);
   display: grid;
-  grid-template-columns: minmax(420px, 1.4fr) minmax(520px, 1.8fr) minmax(164px, auto);
+  grid-template-columns: minmax(360px, 1.25fr) minmax(500px, 1.7fr) minmax(230px, auto);
   align-items: center;
   gap: 6px;
   -webkit-app-region: drag;
@@ -305,7 +305,7 @@ select:focus {
 .footer-row {
   flex: 0 0 auto;
   display: grid;
-  grid-template-columns: 62px 93px;
+  grid-template-columns: 72px 62px 93px;
   align-items: center;
   gap: 6px;
   min-width: 0;
@@ -325,6 +325,18 @@ select:focus {
   display: grid;
   grid-template-columns: 20px 20px 46px 20px;
   gap: 3px;
+}
+
+.timer-label {
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: 9px;
+  line-height: 1;
+  font-weight: 700;
+  text-transform: uppercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .timer-readout {

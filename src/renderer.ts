@@ -398,6 +398,7 @@ const renderTasks = (
       }
     </section>
     <section class="footer-row">
+      <span class="timer-label">Time Tracked</span>
       <input
         id="timer-readout"
         class="timer-readout"
