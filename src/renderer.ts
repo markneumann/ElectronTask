@@ -46,7 +46,16 @@ const renderShell = (content: string) => {
     return;
   }
 
-  root.innerHTML = `<main class="widget-shell">${content}</main>`;
+  root.innerHTML = `
+    <main class="widget-shell">
+      <div class="drag-handle" title="Drag widget" aria-hidden="true">
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+      ${content}
+    </main>
+  `;
 };
 
 const currentTimerMs = () => timerBaseMs + Date.now() - timerStartedAt;

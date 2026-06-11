@@ -98,7 +98,7 @@ textarea {
   border-radius: 6px;
   box-shadow: var(--shell-shadow);
   display: grid;
-  grid-template-columns: minmax(360px, 1.25fr) minmax(500px, 1.7fr) minmax(205px, auto);
+  grid-template-columns: 16px minmax(340px, 1.25fr) minmax(500px, 1.7fr) minmax(205px, auto);
   align-items: center;
   gap: 6px;
   -webkit-app-region: drag;
@@ -109,8 +109,32 @@ textarea {
   min-width: 0;
 }
 
+.drag-handle {
+  width: 14px;
+  height: 18px;
+  display: grid;
+  grid-template-columns: 1fr;
+  align-content: center;
+  justify-items: center;
+  gap: 2px;
+  border-radius: 4px;
+  color: var(--text-muted);
+}
+
+.drag-handle span {
+  width: 9px;
+  height: 1px;
+  background: currentColor;
+  opacity: 0.9;
+}
+
+.drag-handle:hover {
+  color: var(--accent);
+  background: var(--control-bg);
+}
+
 .task-summary.centered {
-  grid-column: 1 / -1;
+  grid-column: 2 / -1;
 }
 
 .task-summary {
@@ -381,7 +405,7 @@ select:focus {
 
 .setup-form {
   display: grid;
-  grid-column: 1 / -1;
+  grid-column: 2 / -1;
   grid-template-columns: 140px minmax(180px, 1fr) minmax(140px, 0.7fr) 150px 90px;
   align-items: center;
   gap: 6px;
@@ -389,7 +413,7 @@ select:focus {
 
 .list-config-form {
   display: grid;
-  grid-column: 1 / -1;
+  grid-column: 2 / -1;
   grid-template-columns: auto auto minmax(240px, 1fr) 48px 38px 54px minmax(120px, 0.6fr);
   align-items: center;
   gap: 6px;
@@ -510,7 +534,7 @@ label,
 }
 
 .action-row {
-  grid-column: 1 / -1;
+  grid-column: 2 / -1;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
