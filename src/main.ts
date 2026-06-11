@@ -29,6 +29,7 @@ type AppStore = {
   hotkey?: string;
   launchAtLogin?: boolean;
   appearance?: AppearanceTheme;
+  snapPosition?: SnapPosition;
 };
 
 type ClickUpTask = {
@@ -53,6 +54,7 @@ type ClickUpTeam = {
 };
 
 type AppearanceTheme = 'black' | 'white' | 'bright';
+type SnapPosition = 'top' | 'bottom';
 
 type ClickUpSnapshot = {
   user: {
@@ -85,6 +87,7 @@ const HOTKEY_OPTIONS = [
   'Alt+Shift+C',
 ] as const;
 const APPEARANCE_THEMES = ['black', 'white', 'bright'] as const;
+const SNAP_POSITIONS = ['top', 'bottom'] as const;
 const isDev = Boolean(MAIN_WINDOW_VITE_DEV_SERVER_URL);
 
 const store = new Store<AppStore>({
@@ -691,9 +694,41 @@ const setAppearanceTheme = (payload: unknown) => {
   };
 };
 
+const getSnapPosition = (): SnapPosition => {
+  const snapPosition = store.get('snapPosition');
+
+  return SNAP_POSITIONS.includes(snapPosition as SnapPosition)
+    ? (snapPosition as SnapPosition)
+    : 'top';
+};
+
+const setSnapPosition = (payload: unknown) => {
+  const data = asRecord(payload);
+  const position = trimString(data.position);
+
+  if (!position || !SNAP_POSITIONS.includes(position as SnapPosition)) {
+    throw new Error('Choose one of the supported snap positions.');
+  }
+
+  store.set('snapPosition', position as SnapPosition);
+
+  if (widgetWindow?.isVisible() && !isDev) {
+    widgetWindow.setBounds({
+      ...getWidgetPosition(),
+      width: WINDOW_WIDTH,
+      height: WINDOW_HEIGHT,
+    });
+  }
+
+  return {
+    position: position as SnapPosition,
+  };
+};
+
 const showOptionsMenu = (window: BrowserWindow | null) => {
   const activeHotkey = getConfiguredHotkey();
   const activeAppearance = getAppearanceTheme();
+  const activeSnapPosition = getSnapPosition();
   const launchAtLogin = getLaunchAtLoginStatus();
   const menu = Menu.buildFromTemplate([
     {
@@ -725,6 +760,20 @@ const showOptionsMenu = (window: BrowserWindow | null) => {
         checked: theme === activeAppearance,
         click: () => {
           setAppearanceTheme({ theme });
+        },
+      })),
+    },
+    {
+      label: 'Snap Position',
+      submenu: [
+        { label: 'Top of display', position: 'top' },
+        { label: 'Bottom of display', position: 'bottom' },
+      ].map(({ label, position }) => ({
+        label,
+        type: 'radio',
+        checked: position === activeSnapPosition,
+        click: () => {
+          setSnapPosition({ position });
         },
       })),
     },
@@ -847,12 +896,17 @@ const applyContentSecurityPolicy = () => {
 };
 
 const getWidgetPosition = () => {
+  const snapPosition = getSnapPosition();
+
   if (!tray) {
     const display = screen.getPrimaryDisplay().workArea;
 
     return {
       x: display.x + Math.round((display.width - WINDOW_WIDTH) / 2),
-      y: display.y + 8,
+      y:
+        snapPosition === 'bottom'
+          ? display.y + display.height - WINDOW_HEIGHT - 8
+          : display.y + 8,
     };
   }
 
@@ -872,7 +926,10 @@ const getWidgetPosition = () => {
 
   return {
     x,
-    y: display.y + 8,
+    y:
+      snapPosition === 'bottom'
+        ? display.y + display.height - WINDOW_HEIGHT - 8
+        : display.y + 8,
   };
 };
 
@@ -997,6 +1054,12 @@ ipcMain.handle('settings:getAppearance', () => ({
 }));
 ipcMain.handle('settings:setAppearance', (_event, payload) =>
   setAppearanceTheme(payload),
+);
+ipcMain.handle('settings:getSnapPosition', () => ({
+  position: getSnapPosition(),
+}));
+ipcMain.handle('settings:setSnapPosition', (_event, payload) =>
+  setSnapPosition(payload),
 );
 ipcMain.handle('settings:setDefaultListId', (_event, payload) =>
   setDefaultListId(payload),

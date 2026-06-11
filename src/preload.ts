@@ -46,6 +46,13 @@ contextBridge.exposeInMainWorld('settings', {
     ipcRenderer.invoke('settings:getAppearance') as Promise<AppearanceStatus>,
   setAppearance: (payload: SetAppearancePayload) =>
     ipcRenderer.invoke('settings:setAppearance', payload) as Promise<AppearanceStatus>,
+  getSnapPosition: () =>
+    ipcRenderer.invoke('settings:getSnapPosition') as Promise<SnapPositionStatus>,
+  setSnapPosition: (payload: SetSnapPositionPayload) =>
+    ipcRenderer.invoke(
+      'settings:setSnapPosition',
+      payload,
+    ) as Promise<SnapPositionStatus>,
   setDefaultListId: (payload: SetDefaultListIdPayload) =>
     ipcRenderer.invoke('settings:setDefaultListId', payload) as Promise<AuthStatus>,
   showOptionsMenu: () =>

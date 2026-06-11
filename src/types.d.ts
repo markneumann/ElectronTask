@@ -123,6 +123,16 @@ type SetAppearancePayload = {
   theme: AppearanceTheme;
 };
 
+type SnapPosition = 'top' | 'bottom';
+
+type SnapPositionStatus = {
+  position: SnapPosition;
+};
+
+type SetSnapPositionPayload = {
+  position: SnapPosition;
+};
+
 type SetDefaultListIdPayload = {
   defaultListId: string | null;
 };
@@ -157,6 +167,10 @@ interface Window {
     ) => Promise<LaunchAtLoginStatus>;
     getAppearance: () => Promise<AppearanceStatus>;
     setAppearance: (payload: SetAppearancePayload) => Promise<AppearanceStatus>;
+    getSnapPosition: () => Promise<SnapPositionStatus>;
+    setSnapPosition: (
+      payload: SetSnapPositionPayload,
+    ) => Promise<SnapPositionStatus>;
     setDefaultListId: (payload: SetDefaultListIdPayload) => Promise<AuthStatus>;
     showOptionsMenu: () => Promise<void>;
     onConfigureList: (callback: () => void) => void;
